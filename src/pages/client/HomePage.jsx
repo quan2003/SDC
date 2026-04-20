@@ -44,12 +44,12 @@ export default function HomePage() {
           background: 'radial-gradient(ellipse at 20% 50%, rgba(59, 130, 246, 0.15) 0%, transparent 50%), radial-gradient(ellipse at 80% 50%, rgba(139, 92, 246, 0.1) 0%, transparent 50%)',
         }} />
         <div className="client-container" style={{ position: 'relative', zIndex: 1 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 60, alignItems: 'center' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 350px), 1fr))', gap: '3rem', alignItems: 'center' }}>
             <div className="animate-fade-in-up">
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 16px', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: 'var(--radius-full)', fontSize: '0.8rem', color: 'var(--primary-400)', marginBottom: 20 }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 16px', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: 'var(--radius-full)', fontSize: '0.8rem', color: 'var(--primary-400)', marginBottom: 20, maxWidth: '100vw' }}>
                 <FiAward size={14} /> Trung tâm Phát triển Phần mềm - Đại học Đà Nẵng
               </div>
-              <h1 style={{ fontSize: '2.8rem', fontWeight: 800, lineHeight: 1.2, marginBottom: 20 }}>
+              <h1 style={{ fontSize: 'clamp(2rem, 6vw, 2.8rem)', fontWeight: 800, lineHeight: 1.2, marginBottom: 20 }}>
                 Đào tạo & Cấp <span className="gradient-text">Chứng chỉ CNTT</span> Uy tín
               </h1>
               <p style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', marginBottom: 32, lineHeight: 1.7 }}>
@@ -70,19 +70,20 @@ export default function HomePage() {
                 {stats.map((s, i) => (
                   <div key={i} className="glass-strong" style={{
                     position: 'absolute',
-                    padding: '20px 28px',
+                    padding: '20px 24px',
                     borderRadius: 'var(--radius-lg)',
                     boxShadow: 'var(--shadow-lg)',
                     animation: `float ${6 + i}s ease-in-out infinite`,
                     animationDelay: `${i * 0.5}s`,
+                    minWidth: 'max-content',
                     ...[
-                      { top: 0, left: '10%' },
-                      { top: 60, right: 0 },
-                      { bottom: 80, left: 0 },
-                      { bottom: 20, right: '15%' },
+                      { top: 0, left: '0%' },
+                      { top: 60, right: '0%' },
+                      { bottom: 80, left: '0%' },
+                      { bottom: 20, right: '0%' },
                     ][i],
                   }}>
-                    <div style={{ fontSize: '2rem', fontWeight: 800 }} className="gradient-text">{s.value}</div>
+                    <div style={{ fontSize: '1.8rem', fontWeight: 800 }} className="gradient-text">{s.value}</div>
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{s.label}</div>
                   </div>
                 ))}
