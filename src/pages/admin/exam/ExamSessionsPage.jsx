@@ -24,7 +24,6 @@ export default function ExamSessionsPage() {
     { key: 'name', label: 'Tên đợt thi', required: true, placeholder: 'VD: Đợt thi tháng 6/2024' },
     { key: 'exam_date', label: 'Ngày thi', type: 'date' },
     { key: 'location', label: 'Địa điểm thi' },
-    { key: 'description', label: 'Ghi chú', type: 'textarea' },
     { key: 'status', label: 'Trạng thái', type: 'select', options: [
       { value: 'upcoming', label: 'Chuẩn bị' },
       { value: 'active', label: 'Đang mở' },
@@ -44,7 +43,7 @@ export default function ExamSessionsPage() {
       columns={columns}
       searchFields={['code', 'name', 'location']}
       formFields={formFields}
-      getNewItem={() => ({ code: '', name: '', exam_date: '', location: '', description: '', status: 'upcoming' })}
+      getNewItem={() => ({ code: '', name: '', exam_date: '', location: '', status: 'upcoming' })}
       itemLabel="đợt thi"
     />
   );
