@@ -26,20 +26,33 @@ export async function sendRealEmail({ to, subject, body }) {
   }
 
   try {
-    // Giả lập độ trễ mạng như đang gửi thật qua SMTP
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    // Gọi tệp Vercel Backend Function ẩn
+    const response = await fetch('/api/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        smtpHost: emailOpts.smtpHost,
+        smtpPort: emailOpts.smtpPort || 587,
+        smtpUser: emailOpts.smtpUser,
+        smtpPassword: emailOpts.smtpPassword,
+        to: to,
+        subject: subject,
+        htmlBody: body, // Truyền nội dung HTML
+      })
+    });
+
+    const result = await response.json();
     
-    console.warn('---[GIẢ LẬP GỬI EMAIL THÀNH CÔNG]---');
-    console.log(`Từ: ${emailOpts.smtpUser}`);
-    console.log(`Đến: ${to}`);
-    console.log(`Tiêu đề: ${subject}`);
-    console.log(`Nội dung (HTML):`);
-    console.log(body);
-    console.warn('-----------------------------------');
-    
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || `Server Node.js trả về lỗi ${response.status}`);
+    }
+
+    console.log('---[GỬI EMAIL THÀNH CÔNG QUA NỀN TẢNG VERCEL]---', result.messageId);
     return true;
   } catch (err) {
-    console.error('Lỗi khi gửi email:', err);
+    console.error('Lỗi khi từ chối gửi email:', err);
     throw err;
   }
 }
