@@ -17,7 +17,21 @@ export const certificatesApi = {
         console.warn('Supabase error for certificates:', error.message);
         return [];
       }
-      return data || [];
+      const results = data || [];
+      if (tableName === 'certificate_classes') {
+          return results.map(item => {
+              const [realName, insId] = (item.name || '').split('|');
+              return { 
+                  ...item, 
+                  name: realName, 
+                  instructor_id: insId || '', 
+                  instructorId: insId || '',
+                  subject_id: item.certificate_id,
+                  subjectId: item.certificate_id
+              };
+          });
+      }
+      return results;
     } catch (e) {
       return [];
     }
@@ -145,7 +159,9 @@ export const registrationsApi = {
                feePaid: parsed.feePaid ?? r.paid,
                tuitionPaid: parsed.tuitionPaid ?? r.paid,
                examRoomId: parsed.examRoomId,
-               activityClassId: parsed.activityClassId,
+               classId: parsed.classId || parsed.activityClassId,
+               activityClassId: parsed.activityClassId || parsed.classId,
+               subjectId: parsed.subjectId,
                rawOption: parsed.rawOption
              };
           })()
@@ -308,7 +324,7 @@ export const registrationsApi = {
       school: payload.school,
       class_group: payload.classGroup || payload.class_group,
       status: payload.status,
-      paid: payload.paid ?? payload.feePaid,
+      paid: payload.paid ?? payload.feePaid ?? payload.tuitionPaid,
       certificate_id: payload.certificateId ? Number(payload.certificateId) : null,
       other_request: (() => {
         let obj = {};
@@ -326,6 +342,13 @@ export const registrationsApi = {
         if (payload.cccdPlace) obj.cccdPlace = payload.cccdPlace;
         if (payload.examModule) obj.examModule = payload.examModule;
         if (payload.feePaid !== undefined) obj.feePaid = payload.feePaid;
+        if (payload.tuitionPaid !== undefined) obj.tuitionPaid = payload.tuitionPaid;
+        // Bổ sung các ID lớp vào JSON
+        if (payload.classId) obj.classId = payload.classId;
+        if (payload.activityClassId) obj.activityClassId = payload.activityClassId;
+        if (payload.subjectId) obj.subjectId = payload.subjectId;
+        if (payload.subjectName) obj.subjectName = payload.subjectName;
+        if (payload.type) obj.type = payload.type;
         
         return JSON.stringify(obj);
       })(),
@@ -385,14 +408,32 @@ export const createCrudApi = (tableName) => ({
         return [];
       }
 
+      let results = data || [];
+
       // Special handling for subjects to decode tuition from name
       if (tableName === 'subjects') {
-        return (data || []).map(item => {
+        results = results.map(item => {
           const [name, tuition] = (item.name || '').split('|');
           return { ...item, name: name || item.name, tuition: parseInt(tuition) || 0 };
         });
       }
-      return data || [];
+      
+      // Standardize certificate_classes response
+      if (tableName === 'certificate_classes') {
+        results = results.map(item => ({
+          ...item,
+          subjectId: item.subject_id || item.certificate_id,
+          subject_id: item.subject_id || item.certificate_id,
+          instructorId: item.instructor_id,
+          certificateId: item.certificate_id,
+          startDate: item.start_date,
+          endDate: item.end_date,
+          maxStudents: item.max_students,
+          currentStudents: item.current_students
+        }));
+      }
+
+      return results;
     } catch (e) {
       console.error(`Catch in getAll for ${tableName}:`, e);
       return [];
@@ -403,71 +444,114 @@ export const createCrudApi = (tableName) => ({
     
     let dbPayload = { ...payload };
     
-    // Safety check for registrations table - only allow confirmed columns
+    // Safety check for registrations table
     if (tableName === 'registrations') {
       const allowedCols = [
         'full_name', 'dob', 'gender', 'ethnicity', 'phone', 'email', 'cccd', 
         'cccd_date', 'cccd_place', 'school', 'class_group', 'exam_module', 
         'other_request', 'certificate_id', 'paid'
       ];
-      // Move any extra fields to other_request if they are not there yet
       const extra = {};
       const filtered = {};
       Object.keys(dbPayload).forEach(key => {
-        if (allowedCols.includes(key)) {
-          filtered[key] = dbPayload[key];
-        } else if (key !== 'other_request') {
-          extra[key] = dbPayload[key];
-        }
+        if (allowedCols.includes(key)) filtered[key] = dbPayload[key];
+        else if (key !== 'other_request') extra[key] = dbPayload[key];
       });
-      
-      // Merge extras into other_request
       const currentOther = JSON.parse(dbPayload.other_request || '{}');
       filtered.other_request = JSON.stringify({ ...currentOther, ...extra });
       dbPayload = filtered;
     } else if (tableName === 'subjects') {
       dbPayload.name = `${payload.name}|${payload.tuition || 0}`;
       delete dbPayload.tuition;
+    } else if (tableName === 'certificate_classes') {
+      const subId = payload.subject_id || payload.subjectId;
+      const certId = payload.certificate_id || payload.certificateId;
+      dbPayload = {
+        code: payload.code,
+        name: payload.name,
+        certificate_id: subId ? null : (certId || null),
+        subject_id: subId || null,
+        instructor_id: payload.instructor_id || payload.instructorId || null,
+        start_date: payload.start_date || payload.startDate || null,
+        end_date: payload.end_date || payload.endDate || null,
+        max_students: payload.max_students || payload.maxStudents || 40,
+        current_students: payload.current_students || payload.currentStudents || 0,
+        fee: payload.fee || 0,
+        status: payload.status || 'upcoming'
+      };
     }
 
     const { data, error } = await supabase.from(tableName).insert([dbPayload]).select();
     if (error) throw error;
-    return data[0];
+    
+    const result = data[0];
+    if (tableName === 'certificate_classes' && result) {
+        return {
+          ...result,
+          subjectId: result.subject_id || result.certificate_id,
+          subject_id: result.subject_id || result.certificate_id,
+          instructorId: result.instructor_id,
+          instructor_id: result.instructor_id,
+          certificateId: result.certificate_id,
+          startDate: result.start_date,
+          endDate: result.end_date,
+          maxStudents: result.max_students,
+          currentStudents: result.current_students
+        };
+    }
+    return result;
   },
   async update(id, payload) {
     if (!supabase) return { ...payload, id };
     
     let dbPayload = { ...payload };
 
-    if (tableName === 'registrations') {
-      const allowedCols = [
-        'full_name', 'dob', 'gender', 'ethnicity', 'phone', 'email', 'cccd', 
-        'cccd_date', 'cccd_place', 'school', 'class_group', 'exam_module', 
-        'other_request', 'certificate_id', 'paid'
-      ];
-      const extra = {};
-      const filtered = {};
-      Object.keys(dbPayload).forEach(key => {
-        if (allowedCols.includes(key)) {
-          filtered[key] = dbPayload[key];
-        } else if (key !== 'other_request' && key !== 'id') {
-          extra[key] = dbPayload[key];
-        }
-      });
-      
-      const currentOther = JSON.parse(dbPayload.other_request || '{}');
-      filtered.other_request = JSON.stringify({ ...currentOther, ...extra });
-      dbPayload = filtered;
-    } else if (tableName === 'subjects') {
+    if (tableName === 'subjects') {
       const [cleanName] = (payload.name || '').split('|');
       dbPayload.name = `${cleanName}|${payload.tuition || 0}`;
       delete dbPayload.tuition;
-      if (dbPayload.fee !== undefined) delete dbPayload.fee;
+    } else if (tableName === 'certificate_classes') {
+      dbPayload = {};
+      const map = {
+        code: 'code', name: 'name', 
+        subject_id: 'subject_id', subjectId: 'subject_id',
+        instructor_id: 'instructor_id', instructorId: 'instructor_id',
+        certificateId: 'certificate_id', certificate_id: 'certificate_id',
+        startDate: 'start_date', start_date: 'start_date',
+        endDate: 'end_date', end_date: 'end_date',
+        maxStudents: 'max_students', max_students: 'max_students',
+        currentStudents: 'current_students', current_students: 'current_students',
+        fee: 'fee', status: 'status'
+      };
+      
+      Object.keys(payload).forEach(key => {
+        if (map[key] !== undefined) dbPayload[map[key]] = payload[key];
+      });
+
+      if (dbPayload.subject_id) {
+          dbPayload.certificate_id = null;
+      }
     }
 
     const { data, error } = await supabase.from(tableName).update(dbPayload).eq('id', id).select();
     if (error) throw error;
-    return data[0];
+    
+    const result = data[0];
+    if (tableName === 'certificate_classes' && result) {
+        return {
+          ...result,
+          subjectId: result.subject_id || result.certificate_id,
+          subject_id: result.subject_id || result.certificate_id,
+          instructorId: result.instructor_id,
+          instructor_id: result.instructor_id,
+          certificateId: result.certificate_id,
+          startDate: result.start_date,
+          endDate: result.end_date,
+          maxStudents: result.max_students,
+          currentStudents: result.current_students
+        };
+    }
+    return result;
   },
   async delete(id) {
     if (!supabase) return true;

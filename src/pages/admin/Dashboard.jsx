@@ -4,10 +4,12 @@ import { FiUsers, FiAward, FiLayers, FiFileText, FiTrendingUp, FiDollarSign, FiC
 import { registrationsApi, certificatesApi, certificateClassesApi } from '../../services/api';
 import { formatDateTime } from '../../utils/helpers';
 import { useToast } from '../../contexts/ToastContext';
+import PageLoader from '../../components/PageLoader';
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const toast = useToast();
+  const [loading, setLoading] = useState(true);
   const [registrations, setRegistrations] = useState([]);
   const [certificates, setCertificates] = useState([]);
   const [classes, setClasses] = useState([]);
@@ -26,12 +28,16 @@ export default function Dashboard() {
       } catch (err) {
         console.error('Error loading dashboard data', err);
         toast.error('Lỗi', 'Không thể tải dữ liệu tổng quan');
+      } finally {
+        setLoading(false);
       }
     }
     loadData();
   }, []);
 
   const recentRegistrations = registrations.slice(0, 5);
+
+  if (loading) return <PageLoader loading />;
   return (
     <div className="animate-fade-in-up">
       <div className="page-header">

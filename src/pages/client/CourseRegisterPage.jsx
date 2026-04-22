@@ -150,20 +150,30 @@ export default function CourseRegisterPage() {
   return (
     <div className="container" style={{ maxWidth: 1000, padding: '60px 20px', margin: '0 auto' }}>
       <div className="section-header text-center" style={{ marginBottom: 50 }}>
-        <h1 style={{ fontSize: '2.5rem', fontWeight: 800, marginBottom: 16, background: 'linear-gradient(135deg, var(--primary-600), var(--accent-600))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Đăng ký học Online</h1>
+        <h1 style={{ fontSize: '2.5rem', fontWeight: 800, marginBottom: 16, background: 'linear-gradient(135deg, var(--primary-600), var(--accent-600))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }} className="course-reg-title">Đăng ký học Online</h1>
         <p style={{ color: 'var(--text-secondary)', maxWidth: 650, margin: '0 auto', fontSize: '1.1rem', lineHeight: 1.6 }}>
           Vui lòng điền đầy đủ các thông tin bắt buộc dưới đây để đăng ký tham gia khóa đào tạo tại Trung tâm Phát triển Phần mềm - Đại học Đà Nẵng.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} noValidate className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 380px', gap: 40, alignItems: 'start' }}>
+      <style>{`
+        @media (max-width: 768px) {
+          .course-reg-form { grid-template-columns: 1fr !important; }
+          .course-reg-sticky { position: static !important; order: -1; }
+          .course-reg-grid2 { grid-template-columns: 1fr !important; }
+          .course-reg-card { padding: 20px !important; }
+          .course-reg-title { font-size: 1.8rem !important; }
+        }
+      `}</style>
+
+      <form onSubmit={handleSubmit} noValidate className="animate-fade-in course-reg-form" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 380px', gap: 40, alignItems: 'start' }}>
         
-        <div className="card" style={{ padding: 40, borderRadius: 'var(--radius-xl)', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+        <div className="card course-reg-card" style={{ padding: 40, borderRadius: 'var(--radius-xl)', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
           <h3 style={{ fontSize: '1.2rem', marginBottom: 30, display: 'flex', alignItems: 'center', gap: 12, borderBottom: '1px solid var(--border-color)', paddingBottom: 15 }}>
             <FiUser style={{ color: 'var(--primary-500)' }} /> Thông tin cá nhân học viên
           </h3>
           
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }} className="course-reg-grid2">
             <div className="form-group">
               <label className="form-label required">Họ và tên học viên</label>
               <div style={{ position: 'relative' }}>
@@ -179,7 +189,7 @@ export default function CourseRegisterPage() {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }} className="course-reg-grid2">
             <div className="form-group">
               <label className="form-label required">Số điện thoại liên hệ</label>
               <div style={{ position: 'relative' }}>
@@ -198,7 +208,7 @@ export default function CourseRegisterPage() {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }} className="course-reg-grid2">
             <div className="form-group">
               <label className="form-label required">Số CCCD/CMND</label>
               <div style={{ position: 'relative' }}>
@@ -218,7 +228,7 @@ export default function CourseRegisterPage() {
           </div>
         </div>
 
-        <div style={{ position: 'sticky', top: 100 }}>
+        <div style={{ position: 'sticky', top: 100 }} className="course-reg-sticky">
           <div className="card" style={{ padding: 30, borderRadius: 'var(--radius-xl)', border: '2px solid var(--primary-100)', boxShadow: '0 8px 30px rgba(59, 130, 246, 0.08)' }}>
             <h4 style={{ marginBottom: 20, fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10 }}>
               <FiBook style={{ color: 'var(--primary-500)' }} /> Lựa chọn môn học

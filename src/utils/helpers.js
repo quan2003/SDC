@@ -189,3 +189,22 @@ export const exportToExcel = (data, filename = 'exported_data') => {
     return false;
   }
 };
+
+// Translate technical DB errors to Vietnamese
+export const translateError = (error) => {
+  if (!error) return 'Đã xảy ra lỗi không xác định';
+  const message = typeof error === 'string' ? error : (error.message || '');
+  
+  if (message.includes('violates foreign key constraint')) {
+    if (message.includes('exam_rooms_session_id_fkey')) return 'Không thể xóa đợt thi này vì đang có các Phòng thi được gán vào nó. Vui lòng xóa các phòng thi trước.';
+    if (message.includes('class_id')) return 'Không thể xóa lớp học này vì đang có học viên đăng ký.';
+    if (message.includes('subject_id')) return 'Không thể xóa môn học này vì đang có các lớp học liên quan.';
+    if (message.includes('instructor_id')) return 'Không thể xóa giảng viên này vì đang có các lớp học được phân công.';
+    return 'Không thể xóa mục này vì đang có các dữ liệu khác liên quan (Ràng buộc dữ liệu).';
+  }
+
+  if (message.includes('limit reached')) return 'Đã đạt giới hạn số lượng bản ghi cho phép.';
+  if (message.includes('duplicate key')) return 'Dữ liệu này đã tồn tại trong hệ thống (trùng mã hoặc tên).';
+  
+  return message;
+};

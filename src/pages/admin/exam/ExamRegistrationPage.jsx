@@ -5,6 +5,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { formatDate, formatCurrency, exportToExcel } from '../../../utils/helpers';
 import { registrationsApi, certificatesApi, certificateClassesApi, examSessionsApi, examRoomsApi } from '../../../services/api';
 import EmailModal from '../../../components/EmailModal';
+import PageLoader from '../../../components/PageLoader';
 
 const STATUS_MAP = {
   pending: { label: 'Chờ duyệt', cls: 'badge-warning' },
@@ -15,6 +16,7 @@ const STATUS_MAP = {
 export default function ExamRegistrationPage() {
   const toast = useToast();
   const { isAdmin } = useAuth();
+  const [loading, setLoading] = useState(true);
   const [students, setStudents] = useState([]);
   const [certs, setCerts] = useState([]);
   const [classes, setClasses] = useState([]);
@@ -22,12 +24,19 @@ export default function ExamRegistrationPage() {
   const [rooms, setRooms] = useState([]);
 
   useEffect(() => {
-    registrationsApi.getAll().then(res => setStudents((res || []).filter(r => r.type !== 'course' && r.type !== 'course_registration')));
-
-    certificatesApi.getAll().then(res => setCerts(res || []));
-    certificateClassesApi.getAll().then(res => setClasses(res || []));
-    examSessionsApi.getAll().then(res => setSessions(res || []));
-    examRoomsApi.getAll().then(res => setRooms(res || []));
+    Promise.all([
+      registrationsApi.getAll(),
+      certificatesApi.getAll(),
+      certificateClassesApi.getAll(),
+      examSessionsApi.getAll(),
+      examRoomsApi.getAll()
+    ]).then(([regs, certsRes, clsRes, sessRes, roomsRes]) => {
+      setStudents((regs || []).filter(r => r.type !== 'course' && r.type !== 'course_registration'));
+      setCerts(certsRes || []);
+      setClasses(clsRes || []);
+      setSessions(sessRes || []);
+      setRooms(roomsRes || []);
+    }).finally(() => setLoading(false));
   }, []);
   const [filterStatus, setFilterStatus] = useState('');
   const [filterClass, setFilterClass] = useState('');
@@ -172,6 +181,8 @@ export default function ExamRegistrationPage() {
     const success = exportToExcel(filtered, 'Danh_Sach_Ky_Thi');
     if (success) toast.success('Xuất file thành công', '');
   };
+
+  if (loading) return <PageLoader loading />;
 
   return (
     <div className="animate-fade-in-up">

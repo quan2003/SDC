@@ -33,9 +33,7 @@ const menuItems = [
   {
     type: 'group', label: 'Quản lý lớp', icon: FiUserCheck,
     children: [
-      { path: '/admin/certificate-classes', icon: FiLayers, label: 'Lớp chứng chỉ' },
-      { path: '/admin/activity-class', icon: FiUserCheck, label: 'Lớp sinh hoạt' },
-      { path: '/admin/course-classes', icon: FiClipboard, label: 'Lớp học phần' },
+      { path: '/admin/certificate-classes', icon: FiLayers, label: 'Quản lý lớp học' },
     ]
   },
   {

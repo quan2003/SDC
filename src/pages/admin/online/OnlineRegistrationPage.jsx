@@ -1,9 +1,11 @@
 import { useState, useMemo, useEffect } from 'react';
-import { FiEdit2, FiSearch, FiCheck, FiEye, FiX, FiChevronLeft, FiChevronRight, FiTrash2, FiClock, FiCheckCircle, FiDollarSign, FiGlobe } from 'react-icons/fi';
+import { FiEdit2, FiSearch, FiCheck, FiEye, FiX, FiChevronLeft, FiChevronRight, FiTrash2, FiClock, FiCheckCircle, FiDollarSign, FiGlobe, FiLayers } from 'react-icons/fi';
 import { useToast } from '../../../contexts/ToastContext';
 import { useAuth } from '../../../contexts/AuthContext';
-import { registrationsApi, certificatesApi } from '../../../services/api';
+import { registrationsApi, certificatesApi, certificateClassesApi } from '../../../services/api';
 import { paginate, formatDateTime, formatCurrency } from '../../../utils/helpers';
+import PageLoader from '../../../components/PageLoader';
+import EmailModal from '../../../components/EmailModal';
 
 export default function OnlineRegistrationPage() {
   const toast = useToast();
@@ -21,6 +23,8 @@ export default function OnlineRegistrationPage() {
   const [certFilter, setCertFilter] = useState('all');
   const [certificates, setCertificates] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [emailModalData, setEmailModalData] = useState(null);
   const pageSize = 12;
 
   useEffect(() => {
@@ -92,6 +96,8 @@ export default function OnlineRegistrationPage() {
     }
   };
 
+
+
   const handleUpdate = async (e) => {
     e.preventDefault();
     try {
@@ -104,6 +110,17 @@ export default function OnlineRegistrationPage() {
     }
   };
 
+  const handleToggleStatus = async (item) => {
+    try {
+      const nextStatus = item.status === 'approved' ? 'pending' : 'approved';
+      await registrationsApi.updateStatus(item.id, nextStatus);
+      setData(prev => prev.map(r => r.id === item.id ? { ...r, status: nextStatus } : r));
+      toast.success('Cập nhật', `Đã chuyển sang ${nextStatus === 'approved' ? 'Đã xác nhận' : 'Chờ xử lý'}`);
+    } catch (e) {
+      toast.error('Lỗi', 'Không thể cập nhật trạng thái');
+    }
+  };
+
   const stats = {
     total: data.length,
     pending: data.filter(r => r.status === 'pending').length,
@@ -112,18 +129,62 @@ export default function OnlineRegistrationPage() {
     totalRevenue: data.filter(r => r.paid).reduce((sum, r) => sum + r.fee, 0)
   };
 
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const toggleAll = () => {
+    const pagedIds = paged.data.map(r => r.id);
+    if (selectedIds.length === pagedIds.length && pagedIds.length > 0) setSelectedIds([]);
+    else setSelectedIds(pagedIds);
+  };
+
+  const handleBulkDelete = async () => {
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa ${selectedIds.length} hồ sơ đã chọn?`)) return;
+    setLoading(true);
+    try {
+      await Promise.all(selectedIds.map(id => registrationsApi.delete(id)));
+      setData(prev => prev.filter(r => !selectedIds.includes(r.id)));
+      setSelectedIds([]);
+      toast.success('Thành công', `Đã xóa ${selectedIds.length} hồ sơ.`);
+    } catch (e) {
+      toast.error('Lỗi', 'Không thể xóa một số hồ sơ.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteItem = async () => {
+    const item = deleteModal.item;
+    if (!item) return;
+    try {
+        await registrationsApi.delete(item.id);
+        setData(prev => prev.filter(r => r.id !== item.id));
+        toast.success('Đã xóa', `Đã xóa hồ sơ của ${item.fullName}`);
+        setDeleteModal({ show: false, item: null });
+    } catch (e) {
+        toast.error('Lỗi', 'Không thể xóa hồ sơ này');
+    }
+  };
+
   const renderOtherRequest = (val) => {
-    if (!val) return 'Không có';
+    if (!val) return '—';
     if (typeof val === 'string' && !val.trim().startsWith('{')) return val;
+    
     try {
       const obj = typeof val === 'string' ? JSON.parse(val) : val;
-      const userMsg = obj.other_request || obj.request || obj.message;
-      if (userMsg) return userMsg;
-      const systemKeys = ['source', 'type', 'birthPlace', 'subjectId', 'subjectName', 'fee', 'registeredAt', 'tuitionPaid', 'feePaid', 'examRoomId', 'examSessionId', 'rawOption', 'activityClassId'];
-      const filtered = Object.entries(obj).filter(([k]) => !systemKeys.includes(k) && obj[k]);
-      return filtered.length > 0 ? filtered.map(([k, v]) => `${k}: ${v}`).join(', ') : 'Không có';
-    } catch { return String(val); }
+      const userMsg = obj.other_request || obj.request || obj.message || obj.note;
+      
+      if (userMsg && userMsg.trim()) {
+        return userMsg;
+      }
+      return '—';
+    } catch { 
+      return String(val); 
+    }
   };
+
+  if (loading) return <PageLoader loading />;
 
   return (
     <div className="animate-fade-in-up">
@@ -146,22 +207,35 @@ export default function OnlineRegistrationPage() {
         ))}
       </div>
 
-      {/* Filters */}
       <div className="toolbar card" style={{ padding: 12, marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: 12, flex: 1 }}>
+        <div style={{ display: 'flex', gap: 12, flex: 1, alignItems: 'center' }}>
           <div className="search-bar" style={{ flex: 1, maxWidth: 300 }}>
             <FiSearch className="search-icon" />
-            <input className="form-input" placeholder="Họ tên, SĐT, CCCD..." value={search} onChange={e => setSearch(e.target.value)} style={{ paddingLeft: 36 }} />
+            <input className="form-input" placeholder="Họ tên, SĐT, CCCD..." value={search} onChange={e => { setSearch(e.target.value); setCurrentPage(1); }} style={{ paddingLeft: 36 }} />
           </div>
-          <select className="form-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ width: 160 }}>
+          <select className="form-input" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ width: 160 }}>
             <option value="all">Tất cả trạng thái</option>
             <option value="pending">Chờ xử lý</option>
             <option value="approved">Đã xác nhận</option>
           </select>
-          <select className="form-select" value={certFilter} onChange={e => setCertFilter(e.target.value)} style={{ width: 220 }}>
+          <select className="form-input" value={certFilter} onChange={e => setCertFilter(e.target.value)} style={{ width: 220 }}>
             <option value="all">Tất cả môn học</option>
             {certificates.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
           </select>
+          
+          {selectedIds.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, paddingLeft: 12, borderLeft: '1px solid var(--border-color)' }}>
+              <button className="btn btn-primary btn-sm" onClick={() => setEmailModalData(data.filter(r => selectedIds.includes(r.id)))}>
+                 <FiCheckCircle size={14} /> Gửi Email ({selectedIds.length})
+              </button>
+              {isAdmin && (
+                <button className="btn btn-danger btn-sm" onClick={handleBulkDelete}>
+                  <FiTrash2 size={14} /> Xóa đã chọn
+                </button>
+              )}
+              <button className="btn btn-ghost btn-sm" onClick={() => setSelectedIds([])}>Hủy chọn</button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -170,6 +244,7 @@ export default function OnlineRegistrationPage() {
         <table className="data-table">
           <thead>
             <tr>
+              <th style={{ width: 40 }}><input type="checkbox" checked={selectedIds.length === paged.data.length && paged.data.length > 0} onChange={toggleAll} style={{ accentColor: 'var(--primary-500)' }} /></th>
               <th style={{ width: 50 }}>STT</th>
               <th>Họ tên</th>
               <th>Môn học đăng ký</th>
@@ -183,23 +258,25 @@ export default function OnlineRegistrationPage() {
           <tbody>
             {paged.data.map((r, i) => (
               <tr key={r.id}>
+                <td><input type="checkbox" checked={selectedIds.includes(r.id)} onChange={() => toggleSelect(r.id)} style={{ accentColor: 'var(--primary-500)' }} /></td>
                 <td>{(currentPage - 1) * pageSize + i + 1}</td>
                 <td><strong>{r.fullName}</strong></td>
                 <td>{r.certificateName}</td>
                 <td>{r.phone}</td>
                 <td style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>{formatDateTime(r.submittedAt)}</td>
                 <td style={{ textAlign: 'center' }}>
-                  <span className={`badge ${r.status === 'approved' ? 'badge-success' : 'badge-warning'}`}>
+                  <button className={`badge ${r.status === 'approved' ? 'badge-active' : 'badge-warning'}`} onClick={() => handleToggleStatus(r)} style={{ cursor: 'pointer', border: 'none' }}>
                     {r.status === 'approved' ? 'Đã xác nhận' : 'Chờ xử lý'}
-                  </span>
+                  </button>
                 </td>
                 <td style={{ textAlign: 'center' }}>
-                  <button className={`badge ${r.paid ? 'badge-success' : 'badge-warning'}`} onClick={() => handleTogglePayment(r)}>
+                  <button className={`badge ${r.paid ? 'badge-active' : 'badge-warning'}`} onClick={() => handleTogglePayment(r)} style={{ cursor: 'pointer', border: 'none' }}>
                     {r.paid ? `✓ ${formatCurrency(r.fee)}` : 'Chưa thanh toán'}
                   </button>
                 </td>
                 <td>
                   <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+
                     <button className="btn btn-ghost btn-icon-sm" onClick={() => { setEditModal(r); setFormData({...r}); }} title="Sửa"><FiEdit2 size={13} style={{ color: 'var(--primary-400)' }} /></button>
                     <button className="btn btn-ghost btn-icon-sm" onClick={() => setPreviewItem(r)} title="Xem chi tiết"><FiEye size={13} style={{ color: 'var(--info-500)' }} /></button>
                     {isAdmin && <button className="btn btn-ghost btn-icon-sm" onClick={() => setDeleteModal({ show: true, item: r })} title="Xóa"><FiTrash2 size={13} style={{ color: 'var(--danger-400)' }} /></button>}
@@ -210,6 +287,8 @@ export default function OnlineRegistrationPage() {
           </tbody>
         </table>
       </div>
+
+
 
       {/* Preview Modal */}
       {previewItem && (
@@ -292,6 +371,38 @@ export default function OnlineRegistrationPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {deleteModal.show && (
+        <div className="modal-overlay" onClick={() => setDeleteModal({ show: false, item: null })}>
+          <div className="modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Xác nhận xóa</h3>
+              <button className="modal-close" onClick={() => setDeleteModal({ show: false, item: null })}><FiX /></button>
+            </div>
+            <div className="modal-body" style={{ textAlign: 'center', padding: '24px 0' }}>
+               <FiTrash2 size={40} style={{ color: 'var(--danger-500)', marginBottom: 16 }} />
+               <p>Bạn có chắc chắn muốn xóa hồ sơ của <strong>{deleteModal.item?.fullName}</strong>?</p>
+               <p style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', marginTop: 8 }}>Hành động này không thể hoàn tác.</p>
+            </div>
+            <div className="modal-footer" style={{ justifyContent: 'center' }}>
+              <button className="btn btn-ghost" onClick={() => setDeleteModal({ show: false, item: null })}>Hủy</button>
+              <button className="btn btn-danger" onClick={handleDeleteItem}>Xác nhận xóa</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {emailModalData && (
+        <EmailModal 
+          isOpen={!!emailModalData} 
+          onClose={() => setEmailModalData(null)} 
+          recipients={emailModalData}
+          extraData={{ 
+            className: emailModalData.length === 1 ? emailModalData[0].certificateName : 'Khóa học',
+            amount: emailModalData.length === 1 ? emailModalData[0].fee : undefined
+          }}
+        />
       )}
     </div>
   );

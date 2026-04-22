@@ -37,8 +37,8 @@ export default function EmailModal({ isOpen, onClose, recipients = [], extraData
     
     // Default config values
     const centerName = 'SDC - Trung tâm Phát triển Phần mềm';
-    const amount = extraData.amount ? formatCurrency(extraData.amount) : '350.000 đ';
-    const className = extraData.className || 'Ứng dụng CNTT';
+    const amount = extraData.amount ? formatCurrency(extraData.amount) : '....... đ';
+    const className = extraData.className || '.......';
 
     switch (emailType) {
       case 'tuition':

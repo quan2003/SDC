@@ -6,6 +6,8 @@ import { sendRealEmail } from '../../../utils/mailer';
 import { formatCurrency, formatDateTime, paginate, exportToExcel, formatDate } from '../../../utils/helpers';
 import { registrationsApi, certificatesApi } from '../../../services/api';
 import { generateReceiptHTML, generateExamCardHTML, generateRegistrationFormHTML, printPDF, exportPDF } from '../../../utils/pdfGenerator';
+import PageLoader from '../../../components/PageLoader';
+import EmailModal from '../../../components/EmailModal';
 
 const STATUS_MAP = {
   pending: { label: 'Chờ xử lý', cls: 'badge-warning' },
@@ -29,6 +31,8 @@ export default function OnlineExamRegistrationPage() {
   const [editModal, setEditModal] = useState(null);
   const [payModal, setPayModal] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [emailModalData, setEmailModalData] = useState(null);
   const pageSize = 10;
 
   useEffect(() => {
@@ -150,6 +154,31 @@ export default function OnlineExamRegistrationPage() {
     }
   };
 
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const toggleAll = () => {
+    const pagedIds = paged.data.map(r => r.id);
+    if (selectedIds.length === pagedIds.length && pagedIds.length > 0) setSelectedIds([]);
+    else setSelectedIds(pagedIds);
+  };
+
+  const handleBulkDelete = async () => {
+    if (!window.confirm(`Bạn có chắc muốn xóa ${selectedIds.length} hồ sơ đã chọn?`)) return;
+    setLoading(true);
+    try {
+      await Promise.all(selectedIds.map(id => registrationsApi.delete(id)));
+      setData(prev => prev.filter(r => !selectedIds.includes(r.id)));
+      setSelectedIds([]);
+      toast.success('Thành công', `Đã xóa ${selectedIds.length} hồ sơ`);
+    } catch (e) {
+      toast.error('Lỗi', 'Không thể xóa một số hồ sơ');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const stats = {
     total: data.length,
     pending: data.filter(r => r.status === 'pending').length,
@@ -164,22 +193,36 @@ export default function OnlineExamRegistrationPage() {
     
     try {
       const obj = typeof val === 'string' ? JSON.parse(val) : val;
-      // Chỉ lấy những trường thực sự là yêu cầu của người dùng
       const userMsg = obj.other_request || obj.request || obj.message;
-      if (userMsg) return userMsg;
       
-      // Nếu không có trường cụ thể, lọc bỏ các phím hệ thống
-      const systemKeys = ['source', 'type', 'birthPlace', 'subjectId', 'subjectName', 'fee', 'registeredAt', 'tuitionPaid', 'feePaid', 'examRoomId', 'examSessionId', 'rawOption', 'activityClassId'];
-      const filtered = Object.entries(obj).filter(([k]) => !systemKeys.includes(k) && obj[k]);
+      const labels = {
+        dob: 'Ngày sinh',
+        gender: 'Giới tính',
+        ethnicity: 'Dân tộc',
+        examRoomId: 'Phòng thi',
+        examSessionId: 'Đợt thi',
+        source: 'Nguồn',
+        birthPlace: 'Nơi sinh',
+        rawOption: 'Tùy chọn'
+      };
+
+      const systemKeys = ['type', 'subjectId', 'subjectName', 'fee', 'registeredAt', 'tuitionPaid', 'feePaid', 'activityClassId', 'cccdDate', 'cccdPlace', 'photo'];
+      const filtered = Object.entries(obj).filter(([k]) => !systemKeys.includes(k) && obj[k] !== undefined && obj[k] !== '');
       
-      if (filtered.length > 0) {
-        return filtered.map(([k, v]) => `${k}: ${v}`).join(', ');
-      }
-      return 'Không có';
+      const parts = [];
+      if (userMsg) parts.push(`Nội dung: ${userMsg}`);
+      filtered.forEach(([k, v]) => {
+        if (k === 'other_request' || k === 'request' || k === 'message') return;
+        parts.push(`${labels[k] || k}: ${v}`);
+      });
+
+      return parts.length > 0 ? parts.join(' | ') : 'Không có';
     } catch {
       return String(val);
     }
   };
+
+  if (loading) return <PageLoader loading />;
 
   return (
     <div className="animate-fade-in-up">
@@ -210,9 +253,9 @@ export default function OnlineExamRegistrationPage() {
       </div>
 
       {/* Filters */}
-      <div className="toolbar">
-        <div className="toolbar-left" style={{ flexWrap: 'wrap', gap: 10 }}>
-          <div className="search-bar" style={{ minWidth: 260 }}>
+      <div className="toolbar" style={{ padding: 12 }}>
+        <div style={{ display: 'flex', gap: 12, flex: 1, alignItems: 'center' }}>
+          <div className="search-bar" style={{ minWidth: 260, flex: 1, maxWidth: 300 }}>
             <FiSearch className="search-icon" />
             <input className="form-input" placeholder="Họ tên, SĐT, CCCD, email..." value={search}
               onChange={e => { setSearch(e.target.value); setCurrentPage(1); }} style={{ paddingLeft: 38 }} />
@@ -225,16 +268,20 @@ export default function OnlineExamRegistrationPage() {
             <option value="all">Tất cả chứng chỉ</option>
             {certs.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
           </select>
-          <select className="form-select" value={filterPaid} onChange={e => { setFilterPaid(e.target.value); setCurrentPage(1); }} style={{ width: 160 }}>
-            <option value="all">Tất cả lệ phí</option>
-            <option value="paid">Đã đóng lệ phí</option>
-            <option value="unpaid">Chưa đóng lệ phí</option>
-          </select>
-        </div>
-        <div className="toolbar-right">
-          <span style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)' }}>
-            Hiển thị <strong style={{ color: 'var(--text-primary)' }}>{filtered.length}</strong> / {data.length} hồ sơ
-          </span>
+
+          {selectedIds.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, paddingLeft: 12, borderLeft: '1px solid var(--border-color)' }}>
+              <button className="btn btn-primary btn-sm" onClick={() => setEmailModalData(data.filter(r => selectedIds.includes(r.id)))}>
+                 <FiCheckCircle size={14} /> Gửi Email ({selectedIds.length})
+              </button>
+              {isAdmin && (
+                <button className="btn btn-danger btn-sm" onClick={handleBulkDelete}>
+                  <FiTrash2 size={14} /> Xóa đã chọn
+                </button>
+              )}
+              <button className="btn btn-ghost btn-sm" onClick={() => setSelectedIds([])}>Hủy chọn</button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -244,6 +291,7 @@ export default function OnlineExamRegistrationPage() {
           <table className="data-table">
             <thead>
               <tr>
+                <th style={{ width: 40 }}><input type="checkbox" checked={selectedIds.length === paged.data.length && paged.data.length > 0} onChange={toggleAll} style={{ accentColor: 'var(--primary-500)' }} /></th>
                 <th style={{ width: 44 }}>STT</th>
                 <th>Họ và tên</th>
                 <th>Chứng chỉ đăng ký</th>
@@ -260,6 +308,7 @@ export default function OnlineExamRegistrationPage() {
                 <tr><td colSpan={9} style={{ textAlign: 'center', padding: 48, color: 'var(--text-tertiary)' }}>Không có hồ sơ phù hợp</td></tr>
               ) : paged.data.map((r, i) => (
                 <tr key={r.id}>
+                  <td><input type="checkbox" checked={selectedIds.includes(r.id)} onChange={() => toggleSelect(r.id)} style={{ accentColor: 'var(--primary-500)' }} /></td>
                   <td style={{ color: 'var(--text-tertiary)' }}>{(currentPage - 1) * pageSize + i + 1}</td>
                   <td>
                     <strong>{r.fullName}</strong>
@@ -269,12 +318,12 @@ export default function OnlineExamRegistrationPage() {
                   <td style={{ color: 'var(--text-secondary)' }}>{r.phone}</td>
                   <td style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>{formatDateTime(r.submittedAt)}</td>
                   <td style={{ textAlign: 'center' }}>
-                    <button className={`badge ${r.feePaid ? 'badge-success' : 'badge-warning'}`}>
+                    <button className={`badge ${r.feePaid ? 'badge-active' : 'badge-warning'}`} onClick={() => handleTogglePayment(r)} style={{ cursor: 'pointer', border: 'none' }}>
                       {r.feePaid ? `✓ ${formatCurrency(r.fee)}` : '○ Chờ thu'}
                     </button>
                   </td>
                   <td>
-                    <button className={`badge ${STATUS_MAP[r.status]?.cls || 'badge-warning'}`}>
+                    <button className={`badge ${STATUS_MAP[r.status]?.cls || 'badge-warning'}`} onClick={() => handleToggleStatus(r)} style={{ cursor: 'pointer', border: 'none' }}>
                       {STATUS_MAP[r.status]?.label || r.status}
                     </button>
                   </td>
@@ -415,6 +464,19 @@ export default function OnlineExamRegistrationPage() {
             </div>
           </div>
         </div>
+      )}
+      {/* Email Modal */}
+      {emailModalData && (
+        <EmailModal 
+          isOpen={!!emailModalData} 
+          onClose={() => setEmailModalData(null)} 
+          recipients={emailModalData}
+          extraData={{ 
+            context: 'exam',
+            className: emailModalData.length === 1 ? emailModalData[0].certificateName : 'Đợt thi',
+            amount: emailModalData.length === 1 ? emailModalData[0].fee : undefined
+          }}
+        />
       )}
     </div>
   );

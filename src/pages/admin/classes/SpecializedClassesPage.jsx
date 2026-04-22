@@ -1,36 +1,27 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiLayers, FiUsers, FiPlusCircle, FiX, FiCheck, FiSearch } from 'react-icons/fi';
+import { FiActivity, FiUsers, FiPlusCircle, FiX, FiCheck, FiSearch } from 'react-icons/fi';
 import { useToast } from '../../../contexts/ToastContext';
 import CrudPage from '../../../components/CrudPage';
 import { formatDate, formatCurrency } from '../../../utils/helpers';
-import { certificateClassesApi, subjectsApi, instructorsApi, registrationsApi } from '../../../services/api';
+import { certificateClassesApi, registrationsApi } from '../../../services/api';
 
-// Map camelCase → snake_case trước khi gửi lên Supabase
-const toDbPayload = (formData) => {
-  const payload = {};
-  const map = {
-    code: 'code', name: 'name',
-    subjectId: 'subject_id', subject_id: 'subject_id',
-    instructorId: 'instructor_id', instructor_id: 'instructor_id',
-    startDate: 'start_date', start_date: 'start_date',
-    endDate: 'end_date', end_date: 'end_date',
-    maxStudents: 'max_students', max_students: 'max_students',
-    fee: 'fee', status: 'status'
-  };
+// SpecializedClassesPage (Lớp chuyên đề) mangaging classes WITHOUT certificate_id
+const toDbPayload = (formData) => ({
+  code: formData.code,
+  name: formData.name,
+  certificate_id: null, // Always null for specialized classes
+  start_date: formData.start_date || formData.startDate || null,
+  end_date: formData.end_date || formData.endDate || null,
+  max_students: formData.max_students || formData.maxStudents || 40,
+  current_students: formData.current_students || formData.currentStudents || 0,
+  fee: formData.fee || 0,
+  status: formData.status || 'upcoming',
+});
 
-  Object.keys(formData).forEach(key => {
-    if (map[key]) payload[map[key]] = formData[key];
-  });
-
-  return payload;
-};
-
-export default function CertificateClassesPage() {
+export default function SpecializedClassesPage() {
   const navigate = useNavigate();
   const toast = useToast();
-  const [subjects, setSubjects] = useState([]);
-  const [instructors, setInstructors] = useState([]);
   const [assignModal, setAssignModal] = useState(null);
   const [pendingStudents, setPendingStudents] = useState([]);
   const [selectedStudents, setSelectedStudents] = useState([]);
@@ -38,27 +29,9 @@ export default function CertificateClassesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
 
-  useEffect(() => {
-    Promise.all([
-        subjectsApi.getAll(),
-        instructorsApi.getAll()
-    ]).then(([sRes, iRes]) => {
-        setSubjects(sRes || []);
-        setInstructors(iRes || []);
-    });
-  }, []);
-
   const columns = useMemo(() => [
     { key: 'code', label: 'Mã lớp', render: item => <code style={{ color: 'var(--primary-400)' }}>{item.code}</code> },
-    { key: 'name', label: 'Tên lớp', render: item => <strong>{item.name}</strong> },
-    { key: 'subject_id', label: 'Môn học', render: item => {
-      const sub = subjects.find(s => String(s.id) === String(item.subject_id || item.subjectId));
-      return <span style={{ fontSize: '0.85rem' }}>{sub?.name || '-'}</span>;
-    }},
-    { key: 'instructor_id', label: 'Giảng viên', render: item => {
-        const ins = instructors.find(i => String(i.id) === String(item.instructor_id || item.instructorId));
-        return <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{ins?.fullName || ins?.name || 'Chưa phân công'}</span>;
-    }},
+    { key: 'name', label: 'Tên chuyên đề', render: item => <strong>{item.name}</strong> },
     { key: 'start_date', label: 'Ngày KG', render: item => formatDate(item.start_date || item.startDate) },
     { key: 'current_students', label: 'Sỉ số', render: item => {
       const cur = item.current_students ?? item.currentStudents ?? 0;
@@ -72,14 +45,8 @@ export default function CertificateClassesPage() {
     }},
     { key: 'fee', label: 'Học phí', render: item => <span style={{ color: 'var(--warning-400)' }}>{formatCurrency(item.fee)}</span> },
     { key: 'status', label: 'Trạng thái', render: item => {
-      const statusMap = { 
-        active: ['Đang học', 'badge-active'], 
-        upcoming: ['Sắp KG', 'badge-pending'], 
-        completed: ['Hoàn thành', 'badge-info'],
-        inactive: ['Tạm dừng', 'badge-danger']
-      };
-      const statusKey = String(item.status || '').toLowerCase();
-      const [label, cls] = statusMap[statusKey] || [item.status || 'Chưa rõ', 'badge-info'];
+      const statusMap = { active: ['Đang học', 'badge-active'], upcoming: ['Sắp KG', 'badge-pending'], completed: ['Hoàn thành', 'badge-info'] };
+      const [label, cls] = statusMap[item.status] || ['', 'badge-info'];
       return <span className={`badge ${cls}`}>{label}</span>;
     }},
     { key: 'students', label: 'Học viên', render: item => (
@@ -91,13 +58,11 @@ export default function CertificateClassesPage() {
         <FiUsers size={14} /> Danh sách
       </button>
     )},
-  ], [subjects, instructors, navigate]);
+  ], [navigate]);
 
   const formFields = useMemo(() => [
     { key: 'code', label: 'Mã lớp', required: true },
-    { key: 'name', label: 'Tên lớp', required: true },
-    { key: 'subject_id', label: 'Môn học', type: 'select', options: subjects.map(s => ({ value: s.id, label: s.name })) },
-    { key: 'instructor_id', label: 'Giảng viên', type: 'select', options: instructors.map(i => ({ value: i.id, label: i.fullName || i.name })) },
+    { key: 'name', label: 'Tên chuyên đề', required: true },
     { key: 'start_date', label: 'Ngày khai giảng', type: 'date' },
     { key: 'end_date', label: 'Ngày kết thúc', type: 'date' },
     { key: 'max_students', label: 'Sỉ số tối đa', type: 'number' },
@@ -107,36 +72,12 @@ export default function CertificateClassesPage() {
       { value: 'upcoming', label: 'Sắp khai giảng' },
       { value: 'completed', label: 'Hoàn thành' }
     ]},
-  ], [subjects, instructors]);
+  ], []);
 
-  const fetchCertClasses = async () => {
-    const [classes, allRegs] = await Promise.all([
-        certificateClassesApi.getAll(),
-        registrationsApi.getAll()
-    ]);
-
-    return (classes || []).map(cls => {
-        const classId = cls.id;
-        // Tự động tính sỉ số thực tế từ danh sách học viên
-        const actualCount = (allRegs || []).filter(r => 
-            String(r.classId) === String(classId) || 
-            String(r.activityClassId) === String(classId)
-        ).length;
-
-        // Đồng bộ fallback cho các lớp cũ chưa có subject_id
-        const subId = cls.subject_id || cls.subjectId || cls.certificate_id || cls.certificateId;
-        const sub = subjects.find(s => String(s.id) === String(subId));
-
-        return {
-            ...cls,
-            subjectId: subId,
-            subject_id: subId,
-            current_students: actualCount,
-            currentStudents: actualCount,
-            // Nếu học phí lớp = 0, lấy học phí từ môn học
-            fee: cls.fee || sub?.tuition || 0
-        };
-    });
+  const fetchSpecialized = async () => {
+    const all = await certificateClassesApi.getAll();
+    // Filter out classes that have a certificate_id
+    return (all || []).filter(c => !c.certificate_id && !c.certificateId);
   };
 
   const handleOpenAssign = async (cls) => {
@@ -144,21 +85,17 @@ export default function CertificateClassesPage() {
       const allRegs = await registrationsApi.getAll();
       // Filter students who:
       // 1. Registered for a COURSE (not exam)
-      // 2. Match the class certificate
+      // 2. Registered for a subject/course that is NOT a certificate
       // 3. Are not yet assigned to any class
-      const subjectId = cls.subject_id || cls.subjectId;
-      const filtered = (allRegs || []).filter(r => {
-        const isCourse = (r.type === 'course' || r.type === 'course_registration');
-        const notAssigned = !r.activityClassId && !r.classId;
-        if (!isCourse || !notAssigned) return false;
-
-        // Lọc học viên dựa trên mã môn học khớp với lớp
-        // mapped from parsed.subjectId in registrationsApi.getAll
-        return String(r.subjectId || r.subject_id) === String(subjectId);
-      });
+      const filtered = (allRegs || []).filter(r => 
+        (r.type === 'course' || r.type === 'course_registration') &&
+        !r.certificateId && 
+        !r.activityClassId && !r.classId
+      );
       setPendingStudents(filtered);
       setAssignModal(cls);
       setSelectedStudents([]);
+      setSearchTerm('');
     } catch (e) {
       toast.error('Lỗi', 'Không thể tải danh sách học viên');
     }
@@ -169,7 +106,6 @@ export default function CertificateClassesPage() {
     setIsProcessing(true);
     try {
       const classId = assignModal.id;
-      // Update each student
       for (const studentId of selectedStudents) {
         const student = pendingStudents.find(s => s.id === studentId);
         await registrationsApi.update(studentId, {
@@ -186,7 +122,7 @@ export default function CertificateClassesPage() {
 
       toast.success('Thành công', `Đã thêm ${selectedStudents.length} học viên vào lớp ${assignModal.name}`);
       setAssignModal(null);
-      setRefreshKey(prev => prev + 1); // Trigger refresh
+      setRefreshKey(prev => prev + 1);
     } catch (e) {
       toast.error('Lỗi', 'Có lỗi xảy ra khi xếp lớp');
     } finally {
@@ -208,17 +144,17 @@ export default function CertificateClassesPage() {
     <>
     <CrudPage
       key={refreshKey}
-      title="Quản lý lớp học"
-      icon={FiLayers}
-      onFetch={fetchCertClasses}
+      title="Quản lý lớp chuyên đề"
+      icon={FiActivity}
+      onFetch={fetchSpecialized}
       onCreate={(formData) => certificateClassesApi.create(toDbPayload(formData))}
       onUpdate={(id, formData) => certificateClassesApi.update(id, toDbPayload(formData))}
       onDelete={certificateClassesApi.delete}
       columns={columns}
       searchFields={['code', 'name']}
       formFields={formFields}
-      getNewItem={() => ({ code: '', name: '', subject_id: '', instructor_id: '', start_date: '', end_date: '', max_students: 40, current_students: 0, fee: 0, status: 'upcoming' })}
-      itemLabel="lớp"
+      getNewItem={() => ({ code: '', name: '', start_date: '', end_date: '', max_students: 40, current_students: 0, fee: 0, status: 'upcoming' })}
+      itemLabel="lớp chuyên đề"
       extraActions={(item) => (
         <button 
             className="btn btn-ghost btn-icon-sm" 
@@ -236,13 +172,13 @@ export default function CertificateClassesPage() {
         <div className="modal-overlay" onClick={() => setAssignModal(null)}>
             <div className="modal modal-lg" onClick={e => e.stopPropagation()} style={{ maxWidth: 700 }}>
                 <div className="modal-header">
-                    <h3 className="modal-title">Xếp học viên vào lớp: {assignModal.name}</h3>
+                    <h3 className="modal-title">Xếp học viên vào lớp chuyên đề: {assignModal.name}</h3>
                     <button className="modal-close" onClick={() => setAssignModal(null)}><FiX /></button>
                 </div>
                 <div className="modal-body">
                     <div style={{ marginBottom: 16 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                            <p style={{ margin: 0 }}>Học viên đăng ký môn <b>{subjects.find(s => String(s.id) === String(assignModal.subject_id || assignModal.subjectId))?.name || 'này'}</b> chưa có lớp:</p>
+                            <p style={{ margin: 0 }}>Danh sách đăng ký <b>Học môn lẻ / Chuyên đề</b> chưa có lớp:</p>
                             <div className="search-bar" style={{ width: 250, margin: 0 }}>
                                 <FiSearch className="search-icon" />
                                 <input className="form-input" placeholder="Tìm tên, SĐT..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ paddingLeft: 36, height: 32, fontSize: '0.85rem' }} />
@@ -264,13 +200,13 @@ export default function CertificateClassesPage() {
                                             />
                                         </th>
                                         <th>Học viên</th>
-                                        <th>SĐT / CCCD</th>
-                                        <th>Ngày ĐK</th>
+                                        <th>Môn học đăng ký</th>
+                                        <th>SĐT</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {filteredPending.length === 0 ? (
-                                        <tr><td colSpan={4} style={{ textAlign: 'center', padding: 20 }}>Không có học viên nào đang chờ xếp lớp.</td></tr>
+                                        <tr><td colSpan={4} style={{ textAlign: 'center', padding: 20 }}>Không có học viên chuyên đề nào đang chờ xếp lớp.</td></tr>
                                     ) : (
                                         filteredPending.map(p => (
                                             <tr key={p.id}>
@@ -286,8 +222,8 @@ export default function CertificateClassesPage() {
                                                     />
                                                 </td>
                                                 <td><strong>{p.fullName}</strong></td>
-                                                <td>{p.phone} <br/> <small>{p.cccd}</small></td>
-                                                <td>{formatDate(p.submittedAt)}</td>
+                                                <td>{p.certificateName}</td>
+                                                <td>{p.phone}</td>
                                             </tr>
                                         ))
                                     )}

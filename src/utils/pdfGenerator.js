@@ -22,6 +22,17 @@ const formatDDMMYYYY = (dateStr) => {
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
 };
 
+const parseOtherRequest = (val) => {
+  if (!val) return '';
+  if (typeof val === 'string' && !val.trim().startsWith('{')) return val;
+  try {
+    const obj = typeof val === 'string' ? JSON.parse(val) : val;
+    // Chỉ lấy tin nhắn thực tế mà người dùng nhập vào
+    const userMsg = obj.other_request || obj.request || obj.message;
+    return userMsg || '';
+  } catch { return String(val); }
+};
+
 /**
  * Generate HTML for "Thẻ dự thi" (Exam Card)
  */
@@ -58,9 +69,9 @@ export function generateExamCardHTML(data) {
 
       <!-- Body -->
       <div style="margin: 20px 0 30px 0;">
-        <div style="margin: 8px 0; display: flex; white-space: nowrap;">
-          <span style="margin-right: 5px;">Tên tôi là: </span>
-          <span style="border-bottom: 1px dotted #000; flex: 1; min-width: 10px; font-weight: bold; text-align: center;">${data.fullName || ''}</span>
+        <div style="margin: 8px 0; display: flex;">
+          <span style="margin-right: 5px; white-space: nowrap;">Tên tôi là: </span>
+          <span style="border-bottom: 1px dotted #000; flex: 1; min-width: 10px; font-weight: bold; text-align: left; padding-left: 10px;">${data.fullName || ''}</span>
         </div>
         
         <div style="display: flex; gap: 10px; margin: 8px 0;">
@@ -97,12 +108,12 @@ export function generateExamCardHTML(data) {
         </div>
 
         <div style="display: flex; gap: 10px; margin: 8px 0;">
-          <div style="width: 55%; display: flex; white-space: nowrap;">
-            <span style="margin-right: 5px;">Sinh viên trường: </span>
-            <span style="border-bottom: 1px dotted #000; flex: 1; text-align: center;">${data.school || ''}</span>
+          <div style="width: 60%; display: flex;">
+            <span style="margin-right: 5px; white-space: nowrap;">Sinh viên trường: </span>
+            <span style="border-bottom: 1px dotted #000; flex: 1; text-align: left;">${data.school || ''}</span>
           </div>
-          <div style="width: 45%; display: flex; white-space: nowrap;">
-            <span style="margin-right: 5px;">Lớp: </span>
+          <div style="width: 40%; display: flex;">
+            <span style="margin-right: 5px; white-space: nowrap;">Lớp: </span>
             <span style="border-bottom: 1px dotted #000; flex: 1; text-align: center;">${data.classGroup || ''}</span>
           </div>
         </div>
@@ -141,11 +152,11 @@ export function generateRegistrationFormHTML(data) {
   const cccdDateFormatted = formatDDMMYYYY(data.cccdDate);
 
   return `
-    <div style="font-family: 'Times New Roman', serif; color: #000; background: #fff; padding: 30px 50px; max-width: 800px; margin: 0 auto; font-size: 13pt; line-height: 1.5;">
+    <div style="font-family: 'Times New Roman', serif; color: #000; background: #fff; padding: 15px 45px; max-width: 800px; margin: 0 auto; font-size: 13pt; line-height: 1.3;">
       <!-- Header -->
-      <div style="text-align: center; margin-bottom: 15px; display: flex; flex-direction: column; align-items: center;">
-        <div style="font-weight: bold; font-size: 13pt;">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
-        <div style="font-weight: bold; font-size: 13pt; display: inline-block; line-height: 1.1; margin-top: 4px;">
+      <div style="text-align: center; margin-bottom: 5px; display: flex; flex-direction: column; align-items: center;">
+        <div style="font-weight: bold; font-size: 12pt;">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+        <div style="font-weight: bold; font-size: 12pt; display: inline-block; line-height: 1.1; margin-top: 2px;">
           Độc lập – Tự do – Hạnh phúc
           <div style="border-bottom: 1px solid #000; width: 100%; margin: 1px auto 0;"></div>
         </div>
@@ -153,7 +164,7 @@ export function generateRegistrationFormHTML(data) {
 
       <!-- Title -->
       <div style="text-align: center; margin: 25px 0;">
-        <div style="font-weight: bold; font-size: 16pt;">ĐƠN ĐĂNG KÝ DỰ THI CẤP CHỨNG CHỈ ỨNG DỤNG CNTT</div>
+        <div style="font-weight: bold; font-size: 15pt;">ĐƠN ĐĂNG KÝ DỰ THI CẤP CHỨNG CHỈ ỨNG DỤNG CNTT</div>
       </div>
 
       <!-- Kính gửi -->
@@ -167,20 +178,20 @@ export function generateRegistrationFormHTML(data) {
       </div>
 
       <!-- Form fields -->
-      <div style="margin: 15px 0;">
-        <div style="margin: 8px 0; display: flex; white-space: nowrap;">
-          <span style="margin-right: 5px;">Tên tôi là: </span>
-          <span style="border-bottom: 1px dotted #000; flex: 1; min-width: 10px; font-weight: bold; text-align: center;">${data.fullName || ''}</span>
+      <div style="margin: 10px 0;">
+        <div style="margin: 4px 0; display: flex;">
+          <span style="margin-right: 5px; white-space: nowrap;">Tên tôi là: </span>
+          <span style="border-bottom: 1px dotted #000; flex: 1; min-width: 10px; font-weight: bold; text-align: left; padding-left: 10px;">${data.fullName || ''}</span>
         </div>
         
-        <div style="margin: 8px 0; display: flex; white-space: nowrap;">
+        <div style="margin: 4px 0; display: flex; white-space: nowrap;">
           <span style="margin-right: 5px;">Ngày, tháng, năm sinh: </span>
           <span style="border-bottom: 1px dotted #000; flex: 1; min-width: 10px; text-align: center;">${dobFormatted}</span>
         </div>
         
-        <div style="margin: 8px 0; display: flex; white-space: nowrap;">
+        <div style="margin: 4px 0; display: flex;">
           <span style="margin-right: 5px;">Nơi sinh: <i>(* Ghi theo giấy khai sinh *)</i>: </span>
-          <span style="border-bottom: 1px dotted #000; flex: 1; min-width: 10px; text-align: center;">${data.birthPlace || ''}</span>
+          <span style="border-bottom: 1px dotted #000; flex: 1; min-width: 10px; text-align: left;">${data.birthPlace || ''}</span>
         </div>
         
         <div style="display: flex; gap: 15px; margin: 8px 0;">
@@ -195,12 +206,12 @@ export function generateRegistrationFormHTML(data) {
         </div>
 
         <div style="display: flex; gap: 15px; margin: 8px 0;">
-          <div style="width: 55%; display: flex; white-space: nowrap;">
-            <span style="margin-right: 5px;">Sinh viên Trường: </span>
-            <span style="border-bottom: 1px dotted #000; flex: 1; text-align: center;">${data.school || ''}</span>
+          <div style="width: 65%; display: flex;">
+            <span style="margin-right: 5px; white-space: nowrap;">Sinh viên Trường: </span>
+            <span style="border-bottom: 1px dotted #000; flex: 1; text-align: left;">${data.school || ''}</span>
           </div>
-          <div style="width: 45%; display: flex; white-space: nowrap;">
-            <span style="margin-right: 5px;">Lớp: </span>
+          <div style="width: 35%; display: flex;">
+            <span style="margin-right: 5px; white-space: nowrap;">Lớp: </span>
             <span style="border-bottom: 1px dotted #000; flex: 1; text-align: center;">${data.classGroup || ''}</span>
           </div>
         </div>
@@ -236,9 +247,9 @@ export function generateRegistrationFormHTML(data) {
           <span style="border-bottom: 1px dotted #000; flex: 1; text-align: center;">${data.examModule || ''}</span>
         </div>
         
-        <div style="margin: 6px 0; padding-left: 15px; display: flex; white-space: nowrap;">
-          <span style="margin-right: 5px;">- Yêu cầu khác <i>(nếu có)</i>: </span>
-          <span style="border-bottom: 1px dotted #000; flex: 1; text-align: center;">${data.otherRequest || ''}</span>
+        <div style="margin: 4px 0; padding-left: 15px; display: flex;">
+          <span style="margin-right: 5px; white-space: nowrap;">- Yêu cầu khác <i>(nếu có)</i>: </span>
+          <span style="border-bottom: 1px dotted #000; flex: 1; text-align: left; font-size: 11pt; font-weight: 500;">${parseOtherRequest(data.otherRequest)}</span>
         </div>
       </div>
 
@@ -251,24 +262,24 @@ export function generateRegistrationFormHTML(data) {
       </div>
 
       <!-- Footer -->
-      <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+      <div style="display: flex; justify-content: space-between; margin-top: 5px;">
         <div>
-          <div style="font-style: italic; margin-bottom: 8px; font-size: 12pt;">Ảnh thẻ:</div>
-          <div style="width: 95px; height: 127px; border: 1px solid #000; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #fff;">
-            ${data.photo ? `<img src="${data.photo}" style="width:100%;height:100%;object-fit:cover;" />` : '<span style="font-size: 14pt; color: #000;">3x4</span>'}
+          <div style="font-style: italic; margin-bottom: 2px; font-size: 11pt;">Ảnh thẻ:</div>
+          <div style="width: 85px; height: 114px; border: 1px solid #000; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #fff;">
+            ${data.photo ? `<img src="${data.photo}" style="width:100%;height:100%;object-fit:cover;" />` : '<span style="font-size: 12pt; color: #000;">3x4</span>'}
           </div>
         </div>
         <div style="text-align: center;">
-          <div style="font-style: italic; font-size: 13pt;">Đà Nẵng, ngày ${today.day} tháng ${today.month} năm ${today.year}</div>
-          <div style="font-weight: bold; margin-top: 8px; font-size: 13pt;">Người đăng ký dự thi</div>
-          <div style="font-style: italic; font-size: 12pt;">(Ký, ghi rõ họ tên)</div>
-          <div style="margin-top: 55px; font-weight: bold; font-size: 13pt;">${data.fullName || ''}</div>
+          <div style="font-style: italic; font-size: 12pt;">Đà Nẵng, ngày ${today.day} tháng ${today.month} năm ${today.year}</div>
+          <div style="font-weight: bold; margin-top: 3px; font-size: 12pt;">Người đăng ký dự thi</div>
+          <div style="font-style: italic; font-size: 11pt;">(Ký, ghi rõ họ tên)</div>
+          <div style="margin-top: 35px; font-weight: bold; font-size: 12pt;">${data.fullName || ''}</div>
         </div>
       </div>
 
       <!-- Note -->
-      <div style="font-style: italic; font-size: 11pt; margin-top: 15px; border-top: 1px solid #eee; padding-top: 5px;">
-        <strong>***</strong> Thí sinh chịu trách nhiệm với những thông tin ghi trên hồ sơ để cấp chứng chỉ, không giải quyết cho những trường hợp đăng ký hộ.
+      <div style="font-style: italic; font-size: 10.5pt; margin-top: 8px; border-top: 1px solid #eee; padding-top: 3px;">
+        <strong style="text-decoration: underline;">*** Lưu ý:</strong> Thí sinh chịu trách nhiệm với những thông tin ghi trên hồ sơ để cấp chứng chỉ, không giải quyết cho những trường hợp đăng ký hộ.
       </div>
     </div>
   `;
@@ -356,17 +367,27 @@ export function generateReceiptHTML(data) {
     const counterKey = `receiptCounter_${feePrefix}`;
     const startCounter = 1;
     let counter = parseInt(localStorage.getItem(counterKey) || String(startCounter), 10);
-    receiptNo = String(counter);
+    // Format: PT-00001 (Tuition) or BL-00001 (Exam Fee/Bill)
+    const prefix = isTuition ? 'PT-' : 'BL-';
+    receiptNo = prefix + String(counter).padStart(5, '0');
     localStorage.setItem(counterKey, String(counter + 1));
     localStorage.setItem(`receiptNo_${feePrefix}_${data.id}`, receiptNo);
   }
 
   const getFeeText = (fee) => {
+    if (!fee) return '.......................................';
+    
+    const units = ['', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín'];
+    const amountStr = String(fee);
+
+    // Simple manual mapping for common values to be faster
     if (fee === 350000) return 'Ba trăm năm mươi nghìn đồng chẵn';
     if (fee === 300000) return 'Ba trăm nghìn đồng chẵn';
-    if (fee === 250000) return 'Hai trăm năm mươi nghìn đồng chẵn';
+    if (fee === 1000000) return 'Một triệu đồng chẵn';
     if (fee === 400000) return 'Bốn trăm nghìn đồng chẵn';
-    return fee ? fee.toLocaleString() + ' đồng' : '.......................................';
+    if (fee === 250000) return 'Hai trăm năm mươi nghìn đồng chẵn';
+    
+    return fee.toLocaleString('vi-VN') + ' đồng chẵn';
   };
 
   const nameUpper = (data.fullName || '').toUpperCase();

@@ -1,8 +1,9 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { FiSearch, FiPlus, FiEdit2, FiTrash2, FiCheck, FiX, FiChevronLeft, FiChevronRight, FiDownload, FiMoreVertical } from 'react-icons/fi';
 import { useToast } from '../contexts/ToastContext';
-import { filterBySearch, paginate, sortItems } from '../utils/helpers';
+import { filterBySearch, paginate, sortItems, translateError } from '../utils/helpers';
 import DateInput from './DateInput';
+import PageLoader from './PageLoader';
 
 /**
  * Generic CRUD page component for admin management pages
@@ -111,7 +112,7 @@ export default function CrudPage({
       }
       setModalOpen(false);
     } catch (err) {
-      toast.error('Lỗi', err.message);
+      toast.error('Lỗi', translateError(err));
     } finally {
       setIsLoading(false);
     }
@@ -133,7 +134,7 @@ export default function CrudPage({
       toast.success('Xóa thành công', `Đã xóa ${itemLabel}`);
       setDeleteConfirm(null);
     } catch (err) {
-      toast.error('Lỗi xóa dữ liệu', err.message);
+      toast.error('Lỗi xóa dữ liệu', translateError(err));
     } finally {
       setIsLoading(false);
     }
@@ -157,6 +158,10 @@ export default function CrudPage({
       toast.success('Cập nhật trạng thái', `${newStatus === 'active' ? 'Kích hoạt' : 'Ngừng kích hoạt'} thành công`);
     }
   };
+
+  if (isLoading && (currentData?.length === 0 || !currentData)) {
+    return <PageLoader loading={true} />;
+  }
 
   return (
     <div className="animate-fade-in-up">
@@ -195,10 +200,10 @@ export default function CrudPage({
       </div>
 
       {/* Table Section */}
-      <div className="card" style={{ position: 'relative', minHeight: 200 }}>
-        {isLoading && (
-          <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.7)', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span className="loading-spinner"></span> Đang tải dữ liệu...
+      <div className="card" style={{ position: 'relative', minHeight: 180 }}>
+        {isLoading && currentData?.length > 0 && (
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.6)', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'inherit' }}>
+            <span className="loading-spinner"></span> <span style={{ marginLeft: 8, fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Đang cập nhật...</span>
           </div>
         )}
         <div style={{ overflowX: 'auto' }}>

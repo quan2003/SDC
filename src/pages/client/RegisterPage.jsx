@@ -211,6 +211,14 @@ export default function RegisterPage() {
 
   return (
     <div className="client-section" style={{ paddingTop: 40 }}>
+      <style>{`
+        @media (max-width: 768px) {
+          .reg-header { flex-direction: column !important; gap: 20px !important; }
+          .reg-grid { grid-template-columns: 1fr !important; }
+          .reg-card { padding: 20px !important; }
+          .reg-photo-container { margin: 0 auto !important; }
+        }
+      `}</style>
       <div className="client-container" style={{ maxWidth: 800 }}>
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
           <h1 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: 8 }}>
@@ -222,11 +230,11 @@ export default function RegisterPage() {
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="card" style={{ padding: 32 }}>
+          <div className="card reg-card" style={{ padding: 32 }}>
             {/* Photo + Basic info */}
-            <div style={{ display: 'flex', gap: 28, marginBottom: 24 }}>
+            <div style={{ display: 'flex', gap: 28, marginBottom: 24 }} className="reg-header">
               {/* Photo upload */}
-              <div style={{ flexShrink: 0 }}>
+              <div style={{ flexShrink: 0 }} className="reg-photo-container">
                 <label className="form-label" style={{ marginBottom: 8, display: 'block' }}>
                   Ảnh thẻ 3x4
                 </label>
@@ -250,7 +258,7 @@ export default function RegisterPage() {
               </div>
 
               {/* Form fields */}
-              <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }} className="reg-grid">
                 <div className="form-group" style={{ gridColumn: 'span 2' }}>
                   <label className="form-label"><FiUser size={13} /> Họ và tên <span className="required">*</span></label>
                   <input className={`form-input ${errors.fullName ? 'error' : ''}`} placeholder="Nhập họ và tên đầy đủ..." value={form.fullName} onChange={e => update('fullName', e.target.value)} />
@@ -269,7 +277,7 @@ export default function RegisterPage() {
             </div>
 
             {/* More fields */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }} className="reg-grid">
               <div className="form-group">
                 <label className="form-label">Giới tính</label>
                 <select className="form-select" value={form.gender} onChange={e => update('gender', e.target.value)}>
@@ -350,7 +358,7 @@ export default function RegisterPage() {
             <h3 style={{ fontSize: '1.05rem', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
               <FiBook size={16} /> Thông tin đăng ký dự thi
             </h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }} className="reg-grid">
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label className="form-label">Tên chứng chỉ <span className="required">*</span></label>
                 <select className={`form-select ${errors.certificateId ? 'error' : ''}`} value={form.certificateId} onChange={e => update('certificateId', e.target.value)}>

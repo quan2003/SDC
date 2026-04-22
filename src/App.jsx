@@ -23,8 +23,8 @@ import SubjectsPage from './pages/admin/catalog/SubjectsPage';
 import ClassroomsPage from './pages/admin/catalog/ClassroomsPage';
 import UnitsPage from './pages/admin/catalog/UnitsPage';
 import CertificateClassesPage from './pages/admin/classes/CertificateClassesPage';
-import ActivityClassPage from './pages/admin/classes/ActivityClassPage';
-import CourseClassesPage from './pages/admin/classes/CourseClassesPage';
+import SpecializedClassesPage from './pages/admin/classes/SpecializedClassesPage';
+import ClassStudentsPage from './pages/admin/classes/ClassStudentsPage';
 import ExamSessionsPage from './pages/admin/exam/ExamSessionsPage';
 import ExamRegistrationPage from './pages/admin/exam/ExamRegistrationPage';
 import ExamPaidListPage from './pages/admin/exam/ExamPaidListPage';
@@ -108,8 +108,8 @@ function AppRoutes() {
 
         {/* Classes */}
         <Route path="certificate-classes" element={<CertificateClassesPage />} />
-        <Route path="activity-class" element={<ActivityClassPage />} />
-        <Route path="course-classes" element={<CourseClassesPage />} />
+        <Route path="specialized-classes" element={<CertificateClassesPage />} />
+        <Route path="class-students/:classId" element={<ClassStudentsPage />} />
 
         {/* Exam */}
         <Route path="exam-sessions" element={<ExamSessionsPage />} />
