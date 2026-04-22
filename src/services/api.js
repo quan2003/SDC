@@ -433,6 +433,14 @@ export const createCrudApi = (tableName) => ({
         }));
       }
 
+      // Standardize instructors response
+      if (tableName === 'instructors') {
+        results = results.map(item => ({
+          ...item,
+          fullName: item.full_name || item.fullName
+        }));
+      }
+
       return results;
     } catch (e) {
       console.error(`Catch in getAll for ${tableName}:`, e);
@@ -479,6 +487,15 @@ export const createCrudApi = (tableName) => ({
         fee: payload.fee || 0,
         status: payload.status || 'upcoming'
       };
+    } else if (tableName === 'instructors') {
+      dbPayload = {
+        code: payload.code,
+        full_name: payload.fullName || payload.full_name,
+        specialization: payload.specialization,
+        phone: payload.phone,
+        email: payload.email,
+        status: payload.status
+      };
     }
 
     const { data, error } = await supabase.from(tableName).insert([dbPayload]).select();
@@ -498,6 +515,9 @@ export const createCrudApi = (tableName) => ({
           maxStudents: result.max_students,
           currentStudents: result.current_students
         };
+    }
+    if (tableName === 'instructors' && result) {
+        return { ...result, fullName: result.full_name };
     }
     return result;
   },
@@ -531,6 +551,19 @@ export const createCrudApi = (tableName) => ({
       if (dbPayload.subject_id) {
           dbPayload.certificate_id = null;
       }
+    } else if (tableName === 'instructors') {
+      dbPayload = {};
+      const map = {
+        code: 'code',
+        fullName: 'full_name', full_name: 'full_name',
+        specialization: 'specialization',
+        phone: 'phone',
+        email: 'email',
+        status: 'status'
+      };
+      Object.keys(payload).forEach(key => {
+        if (map[key]) dbPayload[map[key]] = payload[key];
+      });
     }
 
     const { data, error } = await supabase.from(tableName).update(dbPayload).eq('id', id).select();
@@ -550,6 +583,9 @@ export const createCrudApi = (tableName) => ({
           maxStudents: result.max_students,
           currentStudents: result.current_students
         };
+    }
+    if (tableName === 'instructors' && result) {
+        return { ...result, fullName: result.full_name };
     }
     return result;
   },
