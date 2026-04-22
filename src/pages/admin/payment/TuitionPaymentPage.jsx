@@ -142,7 +142,7 @@ export default function TuitionPaymentPage() {
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: 8 }}>Quét mã VietQR để thanh toán</div>
                     <div style={{ width: 180, height: 180, background: 'white', borderRadius: 'var(--radius-md)', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-color)' }}>
                       <img 
-                        src={`https://img.vietqr.io/image/970418-5601274934-compact.png?amount=${result.fee}&addInfo=SDC ${result.cccd} ${result.fullName}&accountName=TT PT PHAN MEM DAI HOC DA NANG`}
+                        src={`https://img.vietqr.io/image/970418-5601274934-compact.png?amount=${result.fee}&addInfo=${encodeURIComponent(`SDC - ${result.fullName} - LPTCB ${result.examSessionName}`)}&accountName=TT PT PHAN MEM DAI HOC DA NANG`}
                         alt="QR Code"
                         style={{ maxWidth: '100%', maxHeight: '100%' }}
                       />

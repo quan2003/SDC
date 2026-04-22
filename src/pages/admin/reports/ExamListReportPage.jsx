@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react';
 import { FiFileText, FiDownload, FiPrinter, FiUsers, FiSearch } from 'react-icons/fi';
-import { registrationsApi, examSessionsApi } from '../../../services/api';
+import { registrationsApi, examSessionsApi, certificatesApi, examRoomsApi } from '../../../services/api';
 import { formatDate, exportToExcel } from '../../../utils/helpers';
 import { printPDF } from '../../../utils/pdfGenerator';
-import { mockCertificates } from '../../../utils/mockData';
 
 export default function ExamListReportPage() {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState([]);
   const [sessions, setSessions] = useState([]);
+  const [certificates, setCertificates] = useState([]);
+  const [rooms, setRooms] = useState([]);
   const [selectedSession, setSelectedSession] = useState('');
   const [selectedCert, setSelectedCert] = useState('');
+  const [selectedRoom, setSelectedRoom] = useState('');
 
   useEffect(() => {
     loadInitial();
@@ -19,12 +21,17 @@ export default function ExamListReportPage() {
   const loadInitial = async () => {
     setLoading(true);
     try {
-      const [regs, sess] = await Promise.all([
+      const [regs, sess, certs, rm] = await Promise.all([
         registrationsApi.getAll(),
-        examSessionsApi.getAll()
+        examSessionsApi.getAll(),
+        certificatesApi.getAll(),
+        examRoomsApi.getAll()
       ]);
-      setData(regs);
+      setData((regs || []).filter(r => r.type !== 'course' && r.type !== 'course_registration'));
+
       setSessions(sess);
+      setCertificates(certs || []);
+      setRooms(rm || []);
       if (sess.length > 0) setSelectedSession(sess[0].id);
     } catch (e) {
       console.error(e);
@@ -36,12 +43,13 @@ export default function ExamListReportPage() {
   const filtered = data.filter(r => {
     if (selectedSession && String(r.examSessionId) !== String(selectedSession)) return false;
     if (selectedCert && String(r.certificateId) !== String(selectedCert)) return false;
+    if (selectedRoom && String(r.examRoomId) !== String(selectedRoom)) return false;
     return true;
   });
 
   const handlePrint = () => {
     const session = sessions.find(s => String(s.id) === String(selectedSession));
-    const cert = mockCertificates.find(c => String(c.id) === String(selectedCert));
+    const cert = certificates.find(c => String(c.id) === String(selectedCert));
     
     const html = `
       <div style="font-family: 'Times New Roman', serif; padding: 30px; color: #000;">
@@ -58,6 +66,11 @@ export default function ExamListReportPage() {
           </div>
         </div>
 
+        <style>
+          .print-table { border: 1px solid #000 !important; }
+          .print-table th, .print-table td { border: 1px solid #000 !important; }
+          .print-table th { border-bottom: 1.5px solid #000 !important; font-weight: bold; }
+        </style>
         <h2 style="text-align: center; margin-top: 30px; font-size: 16pt;">DANH SÁCH THÍ SINH DỰ THI</h2>
         <p style="text-align: center; font-style: italic; margin-top: -10px;">
           Khóa thi ngày: ${formatDate(session?.exam_date || '')} ${session?.name || ''}
@@ -65,8 +78,14 @@ export default function ExamListReportPage() {
         <p style="text-align: center; font-weight: bold; margin-top: 5px;">
           Chứng chỉ: ${cert?.name || 'Tất cả'}
         </p>
+        ${selectedRoom ? (() => {
+           const room = rooms.find(r => String(r.id) === String(selectedRoom));
+           let rName = '';
+           try { rName = JSON.parse(room?.supervisor || '{}').roomName || '...'; } catch{}
+           return `<p style="text-align: center; font-weight: bold; margin-top: 5px;">Phòng thi: ${rName} (Ca: ${room?.shift || '...'})</p>`;
+        })() : ''}
 
-        <table border="1" cellpadding="8" style="width: 100%; border-collapse: collapse; margin-top: 30px; font-size: 10pt;">
+        <table class="print-table" cellpadding="8" style="width: 100%; border-collapse: collapse; margin-top: 30px; font-size: 10pt;">
           <thead>
             <tr style="background-color: #f2f2f2;">
               <th rowspan="2">STT</th>
@@ -110,15 +129,16 @@ export default function ExamListReportPage() {
           </tbody>
         </table>
 
-        <div style="margin-top: 40px; display: flex; justify-content: space-between;">
-          <div style="text-align: center; width: 40%;">
-            <p><strong>GIÁM THỊ 1</strong></p>
-            <p style="margin-top: 60px;">...................................</p>
+        <div style="margin-top: 40px; display: flex; justify-content: space-between; align-items: flex-start;">
+          <div style="text-align: center; width: 45%;">
+            <p style="font-style: italic; margin: 0 0 5px 0; visibility: hidden;">Đà Nẵng, ngày .... tháng .... năm 2026</p>
+            <p style="margin: 0;"><strong>GIÁM THỊ 1</strong></p>
+            <p style="margin-top: 70px;">..............................................</p>
           </div>
-          <div style="text-align: right; width: 50%; padding-right: 50px;">
-            <p style="font-style: italic;">Đà Nẵng, ngày .... tháng .... năm 2026</p>
-            <p style="text-align: center; padding-right: 50px;"><strong>GIÁM THỊ 2</strong></p>
-            <p style="text-align: center; margin-top: 60px; padding-right: 50px;">...................................</p>
+          <div style="text-align: center; width: 45%;">
+            <p style="font-style: italic; margin: 0 0 5px 0;">Đà Nẵng, ngày .... tháng .... năm 2026</p>
+            <p style="margin: 0;"><strong>GIÁM THỊ 2</strong></p>
+            <p style="margin-top: 70px;">..............................................</p>
           </div>
         </div>
       </div>
@@ -138,6 +158,12 @@ export default function ExamListReportPage() {
       'CCCD': r.cccd,
       'Điện thoại': r.phone,
       'Email': r.email,
+      'Phòng thi': r.examRoomId ? (() => {
+           const room = rooms.find(rm => String(rm.id) === String(r.examRoomId));
+           let rName = '';
+           try { rName = JSON.parse(room?.supervisor || '{}').roomName; } catch{}
+           return room ? `${rName} (${room.shift})` : 'Chưa xếp';
+      })() : 'Chưa xếp',
       'Đợt thi': session?.name
     })), `DanhSachDuThi_${session?.code || 'All'}`);
   };
@@ -153,7 +179,7 @@ export default function ExamListReportPage() {
       </div>
 
       <div className="card" style={{ marginBottom: 24 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
           <div className="form-group">
             <label className="form-label">Chọn đợt thi</label>
             <select className="form-select" value={selectedSession} onChange={e => setSelectedSession(e.target.value)}>
@@ -162,15 +188,26 @@ export default function ExamListReportPage() {
             </select>
           </div>
           <div className="form-group">
+            <label className="form-label">Chọn phòng thi</label>
+            <select className="form-select" value={selectedRoom} onChange={e => setSelectedRoom(e.target.value)} disabled={!selectedSession}>
+              <option value="">Tất cả phòng thi</option>
+              {rooms.filter(r => String(r.session_id) === String(selectedSession)).map(r => {
+                 let name = 'Phòng';
+                 try { name = JSON.parse(r.supervisor || '{}').roomName || 'Phòng'; } catch {}
+                 return <option key={r.id} value={r.id}>{name} ({r.shift})</option>;
+              })}
+            </select>
+          </div>
+          <div className="form-group">
             <label className="form-label">Loại chứng chỉ</label>
             <select className="form-select" value={selectedCert} onChange={e => setSelectedCert(e.target.value)}>
               <option value="">Tất cả chứng chỉ</option>
-              {mockCertificates.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {certificates.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 6 }}>
             <span style={{ fontSize: '0.9rem', color: 'var(--text-tertiary)' }}>
-              Có <strong style={{ color: 'var(--primary-400)' }}>{filtered.length}</strong> thí sinh thỏa mãn điều kiện
+              Có <strong style={{ color: 'var(--primary-400)' }}>{filtered.length}</strong> thí sinh
             </span>
           </div>
         </div>
@@ -184,7 +221,7 @@ export default function ExamListReportPage() {
                 <th style={{ width: 44 }}>STT</th>
                 <th>SBD</th>
                 <th>Họ tên</th>
-                <th>Phái</th>
+                <th>Giới tính</th>
                 <th>Ngày sinh</th>
                 <th>Nơi sinh</th>
                 <th>CCCD</th>

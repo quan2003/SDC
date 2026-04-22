@@ -2,35 +2,46 @@ import { useState, useEffect } from 'react';
 import { FiBarChart2, FiDownload, FiRotateCcw } from 'react-icons/fi';
 import { useToast } from '../../../contexts/ToastContext';
 import { formatCurrency, exportToExcel } from '../../../utils/helpers';
-import { registrationsApi, examSessionsApi, certificatesApi } from '../../../services/api';
-
+import { registrationsApi, subjectsApi } from '../../../services/api';
 
 export default function TuitionBySessionPage() {
   const toast = useToast();
-  const [filterSession, setFilterSession] = useState('');
-  const [sessionData, setSessionData] = useState([]);
-  const [sessionsList, setSessionsList] = useState([]);
+  const [filterSubject, setFilterSubject] = useState('');
+  const [groupedData, setGroupedData] = useState([]);
+  const [subjectsList, setSubjectsList] = useState([]);
 
   useEffect(() => {
     async function loadStats() {
-      const [regs, sessions, certs] = await Promise.all([
+      const [regs, subjects] = await Promise.all([
         registrationsApi.getAll(),
-        examSessionsApi.getAll(),
-        certificatesApi.getAll()
+        subjectsApi.getAll()
       ]);
-      const validRegs = (regs || []).filter(r => r.examSessionId);
-      const sMap = (sessions || []).reduce((acc, s) => ({ ...acc, [s.id]: s.name }), {});
-      const cMap = (certs || []).reduce((acc, c) => ({ ...acc, [c.id]: c }), {});
-      
+
+      // Chỉ lấy hồ sơ đăng ký học
+      const courseRegs = (regs || []).filter(r =>
+        r.type === 'course' || r.type === 'course_registration'
+      );
+
+      const sMap = (subjects || []).reduce((acc, s) => ({ ...acc, [String(s.id)]: s }), {});
+      setSubjectsList(subjects || []);
+
+      // Nhóm theo Môn học (subjectId trong other_request)
       const grouped = {};
-      validRegs.forEach(r => {
-        const key = `${r.examSessionId}-${r.certificateId}`;
-        if (!grouped[key]) {
-          grouped[key] = {
-            sessionId: r.examSessionId,
-            sessionName: sMap[r.examSessionId] || 'Không xác định',
-            certId: r.certificateId,
-            certName: cMap[r.certificateId]?.name || 'Không xác định',
+      courseRegs.forEach(r => {
+        const parsed = (() => {
+          if (!r.otherRequest) return {};
+          if (typeof r.otherRequest === 'object') return r.otherRequest;
+          try { return JSON.parse(r.otherRequest); } catch { return {}; }
+        })();
+
+        const subjectId = parsed.subjectId || r.certificateId || 'unknown';
+        const subjectName = parsed.subjectName || r.certificateName || 'Không xác định';
+        const fee = r.fee || parsed.fee || parsed.tuition || (sMap[String(subjectId)]?.tuition) || 0;
+
+        if (!grouped[subjectId]) {
+          grouped[subjectId] = {
+            subjectId,
+            subjectName,
             totalStudents: 0,
             paidCount: 0,
             unpaidCount: 0,
@@ -38,30 +49,29 @@ export default function TuitionBySessionPage() {
             collectedAmount: 0
           };
         }
-        const fee = r.fee || cMap[r.certificateId]?.fee || 350000;
-        grouped[key].totalStudents++;
-        grouped[key].totalAmount += fee;
-        if (r.feePaid || r.tuitionPaid || r.paid) {
-          grouped[key].paidCount++;
-          grouped[key].collectedAmount += fee;
+
+        grouped[subjectId].totalStudents++;
+        grouped[subjectId].totalAmount += Number(fee);
+
+        if (r.paid || r.tuitionPaid || r.feePaid) {
+          grouped[subjectId].paidCount++;
+          grouped[subjectId].collectedAmount += Number(fee);
         } else {
-          grouped[key].unpaidCount++;
+          grouped[subjectId].unpaidCount++;
         }
       });
-      const dataArr = Object.values(grouped);
-      setSessionData(dataArr);
-      const uniqueSess = [...new Set(dataArr.map(d => d.sessionId))].map(id => ({
-        id, name: dataArr.find(d => d.sessionId === id)?.sessionName
-      }));
-      setSessionsList(uniqueSess);
+
+      setGroupedData(Object.values(grouped));
     }
     loadStats();
   }, []);
 
-  const filtered = filterSession ? sessionData.filter(d => String(d.sessionId) === filterSession) : sessionData;
+  const filtered = filterSubject
+    ? groupedData.filter(d => String(d.subjectId) === filterSubject)
+    : groupedData;
 
   const handleExport = () => {
-    const success = exportToExcel(filtered, 'ThongKe_HocPhi_TheoDot');
+    const success = exportToExcel(filtered, 'ThongKe_HocPhi_TheoMonHoc');
     if (success) toast.success('Xuất file thành công', '');
   };
 
@@ -76,7 +86,7 @@ export default function TuitionBySessionPage() {
   return (
     <div className="animate-fade-in-up">
       <div className="page-header">
-        <h1 className="page-title"><FiBarChart2 /> Thống kê học phí theo đợt</h1>
+        <h1 className="page-title"><FiBarChart2 /> Thống kê học phí theo môn học</h1>
         <div className="page-actions">
           <button className="btn btn-ghost" onClick={handleExport}><FiDownload size={16} /> Xuất Excel</button>
         </div>
@@ -85,7 +95,7 @@ export default function TuitionBySessionPage() {
       {/* Summary */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16, marginBottom: 24 }}>
         {[
-          { label: 'Tổng thí sinh', value: totals.students, color: 'var(--primary-400)' },
+          { label: 'Tổng học viên', value: totals.students, color: 'var(--primary-400)' },
           { label: 'Đã đóng HP', value: totals.paid, color: 'var(--success-400)' },
           { label: 'Chưa đóng HP', value: totals.unpaid, color: 'var(--danger-400)' },
           { label: 'Tổng HP cần thu', value: formatCurrency(totals.total), color: 'var(--warning-400)' },
@@ -101,24 +111,25 @@ export default function TuitionBySessionPage() {
       {/* Filter */}
       <div className="toolbar">
         <div className="toolbar-left" style={{ gap: 10 }}>
-          <select className="form-select" value={filterSession} onChange={e => setFilterSession(e.target.value)} style={{ width: 220 }}>
-            <option value="">Tất cả đợt thi</option>
-            {sessionsList.map(s => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
+          <select className="form-select" value={filterSubject} onChange={e => setFilterSubject(e.target.value)} style={{ width: 240 }}>
+            <option value="">Tất cả môn học</option>
+            {subjectsList.map(s => (
+              <option key={s.id} value={String(s.id)}>{s.name}</option>
+            ))}
           </select>
-          {filterSession && (
-            <button className="btn btn-ghost btn-sm" onClick={() => setFilterSession('')}><FiRotateCcw size={14} /> Xóa lọc</button>
+          {filterSubject && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setFilterSubject('')}><FiRotateCcw size={14} /> Xóa lọc</button>
           )}
         </div>
       </div>
 
-      <div className="card">
+      <div className="card" style={{ padding: 0 }}>
         <table className="data-table">
           <thead>
             <tr>
               <th style={{ width: 44 }}>STT</th>
-              <th>Đợt thi</th>
-              <th>Loại chứng chỉ</th>
-              <th style={{ textAlign: 'center' }}>Tổng TS</th>
+              <th>Môn học</th>
+              <th style={{ textAlign: 'center' }}>Tổng HV</th>
               <th style={{ textAlign: 'center' }}>Đã đóng HP</th>
               <th style={{ textAlign: 'center' }}>Chưa đóng</th>
               <th style={{ textAlign: 'right' }}>Tổng HP cần thu</th>
@@ -127,13 +138,14 @@ export default function TuitionBySessionPage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((d, i) => {
+            {filtered.length === 0 ? (
+              <tr><td colSpan={8} style={{ textAlign: 'center', padding: 48, color: 'var(--text-tertiary)' }}>Chưa có dữ liệu học phí</td></tr>
+            ) : filtered.map((d, i) => {
               const pct = d.totalAmount > 0 ? Math.round((d.collectedAmount / d.totalAmount) * 100) : 0;
               return (
-                <tr key={`${d.sessionId}-${d.certId}`}>
+                <tr key={d.subjectId}>
                   <td style={{ color: 'var(--text-tertiary)' }}>{i + 1}</td>
-                  <td><strong>{d.sessionName}</strong></td>
-                  <td style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{d.certName}</td>
+                  <td><strong>{d.subjectName}</strong></td>
                   <td style={{ textAlign: 'center', fontWeight: 600 }}>{d.totalStudents}</td>
                   <td style={{ textAlign: 'center', color: 'var(--success-500)', fontWeight: 600 }}>{d.paidCount}</td>
                   <td style={{ textAlign: 'center', color: d.unpaidCount > 0 ? 'var(--danger-400)' : 'var(--text-tertiary)', fontWeight: 600 }}>{d.unpaidCount}</td>
@@ -151,10 +163,9 @@ export default function TuitionBySessionPage() {
               );
             })}
           </tbody>
-          {/* Totals row */}
           <tfoot>
             <tr style={{ background: 'var(--bg-glass)' }}>
-              <td colSpan={3} style={{ fontWeight: 700, padding: '10px 12px' }}>TỔNG CỘNG</td>
+              <td colSpan={2} style={{ fontWeight: 700, padding: '10px 12px' }}>TỔNG CỘNG</td>
               <td style={{ textAlign: 'center', fontWeight: 800 }}>{totals.students}</td>
               <td style={{ textAlign: 'center', fontWeight: 800, color: 'var(--success-500)' }}>{totals.paid}</td>
               <td style={{ textAlign: 'center', fontWeight: 800, color: 'var(--danger-400)' }}>{totals.unpaid}</td>

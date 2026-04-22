@@ -12,6 +12,10 @@ export default function EmailModal({ isOpen, onClose, recipients = [], extraData
   const allFeePaid = recipients.length > 0 && recipients.every(r => r.feePaid);
 
   const getDefaultType = () => {
+    if (extraData?.context === 'exam') {
+      if (!allFeePaid) return 'fee';
+      return 'schedule_exam';
+    }
     if (!allTuitionPaid) return 'tuition';
     if (!allFeePaid) return 'fee';
     return 'schedule_class';
@@ -131,9 +135,9 @@ export default function EmailModal({ isOpen, onClose, recipients = [], extraData
           <div className="form-group" style={{ marginBottom: 16 }}>
             <label className="form-label">Chọn bộ phận / Loại mẫu thư</label>
             <select className="form-select" value={emailType} onChange={e => setEmailType(e.target.value)}>
-              {!allTuitionPaid && <option value="tuition">Kế toán - Nhắc nộp học phí</option>}
+              {extraData?.context !== 'exam' && !allTuitionPaid && <option value="tuition">Kế toán - Nhắc nộp học phí</option>}
               {!allFeePaid && <option value="fee">Khảo thí - Nhắc nộp lệ phí thi</option>}
-              <option value="schedule_class">Giáo vụ - Lịch học</option>
+              {extraData?.context !== 'exam' && <option value="schedule_class">Giáo vụ - Lịch học</option>}
               <option value="schedule_exam">Khảo thí - Lịch thi</option>
               <option value="custom">Tùy chỉnh nội dung</option>
             </select>

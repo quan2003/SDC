@@ -3,20 +3,18 @@ import { FiSend, FiUpload, FiCheckCircle, FiUser, FiPhone, FiMail, FiBook, FiCal
 import { useToast } from '../../contexts/ToastContext';
 import { fileToBase64 } from '../../utils/helpers';
 import DateInput from '../../components/DateInput';
-import { certificatesApi, registrationsApi } from '../../services/api';
+import { certificatesApi, registrationsApi, examSessionsApi, examRoomsApi, classroomsApi } from '../../services/api';
 
-const SCHOOL_LIST = [
-  "Trường Đại học Bách khoa - Đại học Đà Nẵng",
-  "Trường Đại học Kinh tế - Đại học Đà Nẵng",
-  "Trường Đại học Sư phạm - Đại học Đà Nẵng",
-  "Trường Đại học Ngoại ngữ - Đại học Đà Nẵng",
-  "Trường Đại học Sư phạm Kỹ thuật - Đại học Đà Nẵng",
-  "Trường Đại học Công nghệ Thông tin và Truyền thông Việt - Hàn, Đại học Đà Nẵng",
-  "Trường Y Dược - Đại học Đà Nẵng",
-  "Viện Nghiên cứu & Đào tạo Việt - Anh, Đại học Đà Nẵng",
-  "Khoa Giáo dục Thể chất - Đại học Đà Nẵng",
-  "Trường Đại học Kiến trúc Đà Nẵng",
-  "Trường Đại học Đông Á"
+const UDN_SCHOOLS = [
+  "Trường Đại học Bách khoa",
+  "Trường Đại học Kinh tế",
+  "Trường Đại học Sư phạm",
+  "Trường Đại học Ngoại ngữ",
+  "Trường Đại học Sư phạm Kỹ thuật",
+  "Phân hiệu ĐHĐN tại Kon Tum",
+  "Viện NCĐT Việt-Anh",
+  "Trường Đại học Công nghệ thông tin và Truyền thông Việt-Hàn",
+  "Khoa Y Dược"
 ];
 
 export default function RegisterPage() {
@@ -25,25 +23,57 @@ export default function RegisterPage() {
   const [submittedData, setSubmittedData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [certificates, setCertificates] = useState([]);
+  const [examSessions, setExamSessions] = useState([]);
+  const [examRoomsConfig, setExamRoomsConfig] = useState([]);
+  
   const [form, setForm] = useState({
     fullName: '', dob: '', birthPlace: '', gender: 'Nam', ethnicity: 'Kinh',
     phone: '', email: '', cccd: '', cccdDate: '', cccdPlace: '',
-    school: '', classGroup: '', certificateId: '',
+    school: '', classGroup: '', certificateId: '', examSessionId: '', examRoomId: '',
     examModule: '', otherRequest: '', photo: '',
   });
   const [errors, setErrors] = useState({});
   const [isOtherSchool, setIsOtherSchool] = useState(false);
 
   useEffect(() => {
-    async function loadCerts() {
+    async function loadData() {
       try {
-        const certs = await certificatesApi.getAll();
+        const [certs, sessions, rooms, allRegs] = await Promise.all([
+          certificatesApi.getAll(),
+          examSessionsApi.getAll(),
+          examRoomsApi.getAll(),
+          registrationsApi.getAll()
+        ]);
+        
         setCertificates(certs || []);
+        setExamSessions((sessions || []).filter(s => s.status === 'active'));
+        
+        const richRooms = (rooms || []).map(r => {
+          let info = { roomName: `Khung ${r.id}`, capacity: 40, visible: true };
+          try {
+            if (r.supervisor) info = { ...info, ...JSON.parse(r.supervisor) };
+          } catch(e) {}
+          
+          const registeredCount = (allRegs || []).filter(reg => {
+             return String(reg.examRoomId) === String(r.id);
+          }).length;
+          
+          return {
+             ...r,
+             roomName: info.roomName,
+             capacity: info.capacity,
+             visible: info.visible !== false, // mặc định visible = true
+             registeredCount
+          };
+        });
+        // Chỉ hiện phòng thi mà admin đã bật visible
+        setExamRoomsConfig(richRooms.filter(r => r.visible));
+
       } catch (err) {
-        toast.error('Lỗi', 'Không thể tải danh sách chứng chỉ từ máy chủ');
+        toast.error('Lỗi', 'Không thể tải dữ liệu từ máy chủ');
       }
     }
-    loadCerts();
+    loadData();
   }, []);
 
   const validate = () => {
@@ -53,8 +83,32 @@ export default function RegisterPage() {
     if (!form.phone.trim()) e.phone = 'Vui lòng nhập số điện thoại';
     if (!form.cccd.trim()) e.cccd = 'Vui lòng nhập số CCCD';
     if (!form.certificateId) e.certificateId = 'Vui lòng chọn chứng chỉ';
+    if (!form.examSessionId) e.examSessionId = 'Vui lòng chọn đợt thi';
+    // Không bắt buộc examRoomId nữa, để trống sẽ setup ngẫu nhiên
+    if (!isOtherSchool && !form.school) e.school = 'Vui lòng chọn đối tượng/trường';
+    if (isOtherSchool && !form.school.trim()) e.school = 'Vui lòng nhập tên trường';
     setErrors(e);
     return Object.keys(e).length === 0;
+  };
+
+  const getCalculatedFee = () => {
+    const cert = certificates.find(c => c.id === Number(form.certificateId));
+    if (!cert) return 0;
+    
+    const s = (form.school || '').trim().toLowerCase();
+    
+    // 1. Thí sinh tự do -> 500k
+    if (s === 'thí sinh tự do') return cert.fee_free || 500000;
+    
+    // 2. Sinh viên ĐH Đà Nẵng -> 300k
+    const isUDN = UDN_SCHOOLS.some(uds => uds.toLowerCase() === s) || 
+                  s.includes('đại học đà nẵng') || 
+                  s.includes('đhđn');
+                  
+    if (isUDN) return 300000;
+    
+    // 3. Ngoài ĐHĐN (Mặc định cho các trường khác) -> 400k
+    return cert.fee_outside || 400000;
   };
 
   const handleSubmit = async (e) => {
@@ -63,20 +117,28 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       const cert = certificates.find(c => c.id === Number(form.certificateId));
-      
+      const session = examSessions.find(s => String(s.id) === String(form.examSessionId));
+      const calculatedFee = getCalculatedFee();
       const newReg = await registrationsApi.create({
         ...form,
+        type: 'exam',
+        otherRequest: JSON.stringify({
+          examRoomId: String(form.examRoomId),
+          rawOption: form.otherRequest
+        }),
         certificateName: cert?.name || '',
-        fee: cert?.fee || 0,
+        fee: calculatedFee,
       });
 
       setSubmittedData({
         ...newReg,
+        fullName: form.fullName, 
         certificateName: cert?.name || '',
-        fee: cert?.fee || 0,
+        sessionName: session?.name || '',
+        fee: calculatedFee,
       });
       setSubmitted(true);
-      toast.success('Đăng ký thành công!', 'Vui lòng hoàn tất thanh toán học phí');
+      toast.success('Đăng ký thành công!', 'Vui lòng hoàn tất thanh toán lệ phí thi');
     } catch (err) {
       toast.error('Lỗi đăng ký', err.message || 'Có lỗi xảy ra, vui lòng thử lại sau.');
     } finally {
@@ -114,7 +176,7 @@ export default function RegisterPage() {
             </div>
             <h2 style={{ fontSize: '1.8rem', fontWeight: 800, marginBottom: 12 }}>Đăng ký thành công!</h2>
             <p style={{ color: 'var(--text-secondary)', maxWidth: 500, margin: '0 auto 24px', fontSize: '1rem' }}>
-              Đơn đăng ký chứng chỉ <strong>{submittedData?.certificateName}</strong> của bạn đã được gửi. Vui lòng thanh toán học phí để hoàn tất thủ tục.
+              Đơn đăng ký chứng chỉ <strong>{submittedData?.certificateName}</strong> của bạn đã được gửi. Vui lòng thanh toán lệ phí thi để hoàn tất thủ tục.
             </p>
 
             {submittedData && (
@@ -127,7 +189,7 @@ export default function RegisterPage() {
                  </div>
                  <div style={{ padding: 8, background: '#fff', border: '1px dashed var(--border-color)', borderRadius: 'var(--radius-md)' }}>
                     <img 
-                       src={`https://img.vietqr.io/image/970418-5601274934-compact.png?amount=${submittedData.fee}&addInfo=SDC ${submittedData.cccd} ${submittedData.fullName}&accountName=TT PT PHAN MEM DAI HOC DA NANG`}
+                       src={`https://img.vietqr.io/image/970418-5601274934-compact.png?amount=${submittedData.fee}&addInfo=${encodeURIComponent(`SDC - ${submittedData.fullName} - LPTCB ${submittedData.sessionName}`)}&accountName=TT PT PHAN MEM DAI HOC DA NANG`}
                        alt="QR Code thanh toán"
                        style={{ width: '100%', display: 'block' }}
                     />
@@ -229,13 +291,13 @@ export default function RegisterPage() {
                 <input className="form-input" type="email" placeholder="Email..." value={form.email} onChange={e => update('email', e.target.value)} />
               </div>
               <div className="form-group">
-                <label className="form-label">Sinh viên trường</label>
+                <label className="form-label">Đối tượng / Trường <span className="required">*</span></label>
                 <select 
-                  className="form-select" 
-                  value={isOtherSchool ? 'Khác' : form.school}
+                  className={`form-select ${errors.school && !isOtherSchool ? 'error' : ''}`}
+                  value={isOtherSchool ? 'Ngoài Đại học Đà Nẵng' : form.school}
                   onChange={e => {
                     const val = e.target.value;
-                    if (val === 'Khác') {
+                    if (val === 'Ngoài Đại học Đà Nẵng') {
                       setIsOtherSchool(true);
                       update('school', '');
                     } else {
@@ -244,13 +306,16 @@ export default function RegisterPage() {
                     }
                   }}
                 >
-                  <option value="">-- Chọn trường --</option>
-                  {SCHOOL_LIST.map(s => <option key={s} value={s}>{s}</option>)}
-                  <option value="Khác">Khác...</option>
+                  <option value="">-- Chọn đối tượng / trường --</option>
+                  <optgroup label="Thành viên trường Đại học Đà Nẵng">
+                    {UDN_SCHOOLS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </optgroup>
+                  <option value="Ngoài Đại học Đà Nẵng">Ngoài Đại học Đà Nẵng</option>
+                  <option value="Thí sinh tự do">Thí sinh tự do</option>
                 </select>
                 {isOtherSchool && (
                   <input 
-                    className="form-input" 
+                    className={`form-input ${errors.school && isOtherSchool ? 'error' : ''}`}
                     style={{ marginTop: 8 }} 
                     placeholder="Nhập tên trường của bạn..." 
                     value={form.school} 
@@ -258,6 +323,7 @@ export default function RegisterPage() {
                     autoFocus
                   />
                 )}
+                {errors.school && <div className="form-error">{errors.school}</div>}
               </div>
               <div className="form-group">
                 <label className="form-label">Lớp</label>
@@ -290,10 +356,40 @@ export default function RegisterPage() {
                 <select className={`form-select ${errors.certificateId ? 'error' : ''}`} value={form.certificateId} onChange={e => update('certificateId', e.target.value)}>
                   <option value="">-- Chọn chứng chỉ đăng ký --</option>
                   {certificates.filter(c => c.status === 'active').map(c => (
-                    <option key={c.id} value={c.id}>{c.name} ({new Intl.NumberFormat('vi-VN').format(c.fee)}đ)</option>
+                    <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
                 {errors.certificateId && <div className="form-error">{errors.certificateId}</div>}
+              </div>
+              <div className="form-group">
+                <label className="form-label">Đợt thi <span className="required">*</span></label>
+                <select className={`form-select ${errors.examSessionId ? 'error' : ''}`} value={form.examSessionId} onChange={e => { update('examSessionId', e.target.value); update('examRoomId', ''); }}>
+                  <option value="">-- Chọn đợt thi --</option>
+                  {examSessions.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+                {errors.examSessionId && <div className="form-error">{errors.examSessionId}</div>}
+              </div>
+              <div className="form-group">
+                <label className="form-label">Phòng thi & Khung giờ <i style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>(Tùy chọn nếu bận)</i></label>
+                <select 
+                  className={`form-select ${errors.examRoomId ? 'error' : ''}`} 
+                  value={form.examRoomId} 
+                  onChange={e => update('examRoomId', e.target.value)}
+                  disabled={!form.examSessionId}
+                >
+                  <option value="">-- Hệ thống sắp xếp ngẫu nhiên --</option>
+                  {form.examSessionId && examRoomsConfig.filter(r => String(r.session_id) === String(form.examSessionId)).map(r => {
+                     const isFull = r.registeredCount >= r.capacity;
+                     return (
+                       <option key={r.id} value={r.id} disabled={isFull}>
+                         {r.roomName} — {r.shift} {isFull ? `(Hết chỗ: ${r.registeredCount}/${r.capacity})` : `(Đã ĐK: ${r.registeredCount}/${r.capacity})`}
+                       </option>
+                     );
+                  })}
+                </select>
+                {errors.examRoomId && <div className="form-error">{errors.examRoomId}</div>}
               </div>
               <div className="form-group">
                 <label className="form-label">Mô đun dự thi <i style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>(nếu thi nâng cao)</i></label>

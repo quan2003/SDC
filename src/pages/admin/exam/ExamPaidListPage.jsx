@@ -24,7 +24,8 @@ export default function ExamPaidListPage() {
       certificateClassesApi.getAll(),
       examSessionsApi.getAll()
     ]).then(([resStudents, resCerts, resClasses, resSessions]) => {
-      setStudents(resStudents || []);
+      setStudents((resStudents || []).filter(r => r.type !== 'course' && r.type !== 'course_registration'));
+
       setCerts(resCerts || []);
       setClasses(resClasses || []);
       setSessions(resSessions || []);
@@ -37,8 +38,6 @@ export default function ExamPaidListPage() {
   });
 
   const filtered = students.filter(s => {
-    if (filterCert && String(s.certId) !== filterCert) return false;
-    if (filterClass && String(s.classId) !== filterClass) return false;
     if (filterPaid === 'paid' && !s.feePaid) return false;
     if (filterPaid === 'unpaid' && s.feePaid) return false;
     if (search && ![s.fullName, s.code, s.cccd].some(v => v?.toLowerCase().includes(search.toLowerCase()))) return false;
@@ -70,8 +69,6 @@ export default function ExamPaidListPage() {
               <th>Họ và tên</th>
               <th>Ngày sinh</th>
               <th>CCCD</th>
-              <th>Lớp</th>
-              <th>Chứng chỉ</th>
               <th>Lệ phí</th>
             </tr>
           </thead>
@@ -83,8 +80,6 @@ export default function ExamPaidListPage() {
                 <td>${s.fullName}</td>
                 <td>${formatDate(s.dob)}</td>
                 <td>${s.cccd}</td>
-                <td>${s.className}</td>
-                <td>${s.certName}</td>
                 <td align="right">${formatCurrency(s.fee)}</td>
               </tr>
             `).join('')}
@@ -129,14 +124,6 @@ export default function ExamPaidListPage() {
             <option value="paid">Đã đóng lệ phí</option>
             <option value="unpaid">Chưa đóng lệ phí</option>
           </select>
-          <select className="form-select" value={filterCert} onChange={e => setFilterCert(e.target.value)} style={{ width: 200 }}>
-            <option value="">Tất cả chứng chỉ</option>
-            {certs.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
-          </select>
-          <select className="form-select" value={filterClass} onChange={e => setFilterClass(e.target.value)} style={{ width: 200 }}>
-            <option value="">Tất cả lớp</option>
-            {classes.map(c => <option key={c.id} value={String(c.id)}>{c.code}</option>)}
-          </select>
         </div>
         <div className="toolbar-right">
           <span style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)' }}>
@@ -155,8 +142,6 @@ export default function ExamPaidListPage() {
                 <th>Họ và tên</th>
                 <th>Ngày sinh</th>
                 <th>CCCD</th>
-                <th>Lớp</th>
-                <th>Chứng chỉ</th>
                 <th>Lệ phí</th>
                 <th>Trạng thái</th>
                 <th style={{ textAlign: 'center' }}>Phiếu thu</th>
@@ -175,8 +160,6 @@ export default function ExamPaidListPage() {
                   <td><strong>{s.fullName}</strong></td>
                   <td style={{ color: 'var(--text-secondary)' }}>{formatDate(s.dob)}</td>
                   <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{s.cccd}</td>
-                  <td style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>{s.className}</td>
-                  <td style={{ fontSize: '0.82rem' }}>{s.certName}</td>
                   <td style={{ fontWeight: 700 }}>{formatCurrency(s.fee)}</td>
                   <td>
                     {s.feePaid ? (

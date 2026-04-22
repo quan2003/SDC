@@ -4,7 +4,7 @@ import {
   FiHome, FiUsers, FiShield, FiLock, FiGrid, FiImage, FiBell, FiCalendar,
   FiAward, FiBookOpen, FiMap, FiBriefcase, FiLayers, FiUserCheck,
   FiClipboard, FiFileText, FiEdit3, FiDollarSign, FiBarChart2, FiSettings,
-  FiGlobe, FiChevronDown, FiChevronRight, FiMenu
+  FiGlobe, FiChevronDown, FiChevronRight, FiMenu, FiActivity
 } from 'react-icons/fi';
 
 const menuItems = [
@@ -24,7 +24,7 @@ const menuItems = [
   {
     type: 'group', label: 'Quản lý danh mục', icon: FiLayers,
     children: [
-      { path: '/admin/certificates', icon: FiAward, label: 'Chứng chỉ' },
+      { path: '/admin/certificates', icon: FiAward, label: 'Chứng chỉ - Chứng nhận' },
       { path: '/admin/subjects', icon: FiBookOpen, label: 'Môn học' },
       { path: '/admin/classrooms', icon: FiMap, label: 'Phòng học' },
       { path: '/admin/units', icon: FiBriefcase, label: 'Đơn vị' },
@@ -44,7 +44,7 @@ const menuItems = [
       { path: '/admin/exam-sessions', icon: FiCalendar, label: 'Đợt thi' },
       { path: '/admin/exam-registration', icon: FiFileText, label: 'DS đăng ký thi' },
       { path: '/admin/exam-paid', icon: FiDollarSign, label: 'DS đã đóng lệ phí' },
-      { path: '/admin/exam-rooms', icon: FiMap, label: 'DS thi theo phòng' },
+      { path: '/admin/exam-rooms', icon: FiMap, label: 'Phòng thi & Giờ thi' },
       { path: '/admin/exam-scores', icon: FiBarChart2, label: 'Upload điểm' },
     ]
   },

@@ -7,7 +7,7 @@ const navItems = [
   { path: '/gioi-thieu', label: 'Giới thiệu' },
   { path: '/thong-bao', label: 'Thông báo' },
   { path: '/tra-cuu', label: 'Tra cứu' },
-  { path: '/dang-ky', label: 'Đăng ký học' },
+  { path: '/dang-ky-hoc', label: 'Đăng ký học' },
   { path: '/lien-he', label: 'Liên hệ' },
 ];
 
@@ -71,8 +71,8 @@ export default function ClientLayout() {
                 {item.label}
               </NavLink>
             ))}
-            <Link to="/dang-ky" className="btn btn-primary btn-sm" style={{ marginLeft: 8 }}>
-              Đăng ký ngay
+            <Link to="/dang-ky-thi" className="btn btn-primary btn-sm" style={{ marginLeft: 8 }}>
+              Đăng ký thi ngay
             </Link>
           </div>
 

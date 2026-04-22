@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
-import { FiFileText, FiUpload, FiFilter, FiDownload, FiEdit2, FiTrash2, FiCheck, FiX, FiPlus, FiMail } from 'react-icons/fi';
+import { FiFileText, FiUpload, FiFilter, FiDownload, FiEdit2, FiTrash2, FiCheck, FiX, FiPlus, FiMail, FiCheckCircle } from 'react-icons/fi';
 import { useToast } from '../../../contexts/ToastContext';
 import { useAuth } from '../../../contexts/AuthContext';
 import { formatDate, formatCurrency, exportToExcel } from '../../../utils/helpers';
-import { registrationsApi, certificatesApi, certificateClassesApi, examSessionsApi } from '../../../services/api';
+import { registrationsApi, certificatesApi, certificateClassesApi, examSessionsApi, examRoomsApi } from '../../../services/api';
 import EmailModal from '../../../components/EmailModal';
 
 const STATUS_MAP = {
   pending: { label: 'Chờ duyệt', cls: 'badge-warning' },
-  confirmed: { label: 'Đã duyệt', cls: 'badge-active' },
+  approved: { label: 'Đã duyệt', cls: 'badge-active' },
   rejected: { label: 'Từ chối', cls: 'badge-inactive' },
 };
 
@@ -19,12 +19,15 @@ export default function ExamRegistrationPage() {
   const [certs, setCerts] = useState([]);
   const [classes, setClasses] = useState([]);
   const [sessions, setSessions] = useState([]);
+  const [rooms, setRooms] = useState([]);
 
   useEffect(() => {
-    registrationsApi.getAll().then(res => setStudents(res || []));
+    registrationsApi.getAll().then(res => setStudents((res || []).filter(r => r.type !== 'course' && r.type !== 'course_registration')));
+
     certificatesApi.getAll().then(res => setCerts(res || []));
     certificateClassesApi.getAll().then(res => setClasses(res || []));
     examSessionsApi.getAll().then(res => setSessions(res || []));
+    examRoomsApi.getAll().then(res => setRooms(res || []));
   }, []);
   const [filterStatus, setFilterStatus] = useState('');
   const [filterClass, setFilterClass] = useState('');
@@ -33,6 +36,7 @@ export default function ExamRegistrationPage() {
   const [search, setSearch] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [emailModalData, setEmailModalData] = useState(null);
+  const [payModal, setPayModal] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
 
   const toggleSelect = (id) => {
@@ -43,10 +47,66 @@ export default function ExamRegistrationPage() {
     else setSelectedIds(filtered.map(s => s.id));
   };
 
+  const handleAutoAssign = async () => {
+    const examRegs = filtered.filter(s => 
+      (!filterSession || String(s.examSessionId) === String(filterSession)) 
+      && s.examSessionId 
+      && !s.examRoomId 
+      && s.status === 'approved'
+    );
+    
+    if(examRegs.length === 0) return toast.info('Không có', 'Không có hồ sơ hợp lệ (đã duyệt & chưa xếp phòng) để tự động xếp.');
+    
+    const assignedCounts = {};
+    students.forEach(s => {
+        if(s.examRoomId) assignedCounts[s.examRoomId] = (assignedCounts[s.examRoomId] || 0) + 1;
+    });
+    
+    const sessionsToProcess = filterSession ? [filterSession] : [...new Set(examRegs.map(r => String(r.examSessionId)))];
+    const toUpdate = [];
+    let skippedCount = 0;
+    
+    for (let sid of sessionsToProcess) {
+      const sessionRegs = examRegs.filter(s => String(s.examSessionId) === String(sid));
+      const validRooms = rooms.filter(r => String(r.session_id) === String(sid));
+      
+      for(let s of sessionRegs) {
+         if (!s.feePaid) {
+            skippedCount++;
+            continue;
+         }
+         for(let r of validRooms) {
+            let cap = 40;
+            try { cap = JSON.parse(r.supervisor || '{}').capacity || 40; } catch {}
+            const cur = assignedCounts[r.id] || 0;
+            if(cur < cap) {
+                assignedCounts[r.id] = cur + 1;
+                toUpdate.push({...s, examRoomId: String(r.id)});
+                break;
+            }
+         }
+      }
+    }
+    
+    if(toUpdate.length > 0) {
+      for(let s of toUpdate) {
+          await registrationsApi.update(s.id, { ...s, examRoomId: s.examRoomId });
+      }
+      setStudents(prev => prev.map(s => toUpdate.find(u => u.id === s.id) ? { ...s, examRoomId: toUpdate.find(u => u.id === s.id).examRoomId } : s));
+      let msg = `Đã xếp phòng cho ${toUpdate.length} hồ sơ.`;
+      if (skippedCount > 0) msg += ` (Đã bỏ qua ${skippedCount} hồ sơ chưa nộp lệ phí)`;
+      toast.success('Xếp phòng xong', msg);
+    } else {
+      if (skippedCount > 0) {
+        toast.warning('Cảnh báo', `Không có hồ sơ nào được xếp phòng do ${skippedCount} hồ sơ chưa nộp lệ phí.`);
+      } else {
+        toast.warning('Hết chỗ', 'Các phòng thi trong đợt này đã đầy, vui lòng thêm phòng thi!');
+      }
+    }
+  };
+
   const filtered = students.filter(s => {
     if (filterStatus && s.status !== filterStatus) return false;
-    if (filterClass && String(s.classId) !== filterClass) return false;
-    if (filterCert && String(s.certId) !== filterCert) return false;
     if (filterSession && String(s.examSessionId) !== filterSession) return false;
     if (search && ![s.fullName, s.code, s.cccd, s.phone].some(v => v?.toLowerCase().includes(search.toLowerCase()))) return false;
     return true;
@@ -57,7 +117,7 @@ export default function ExamRegistrationPage() {
       const student = students.find(s => s.id === id);
       await registrationsApi.update(id, { ...student, status: st });
       setStudents(prev => prev.map(s => s.id === id ? { ...s, status: st } : s));
-      toast.success('Cập nhật', `Đã ${st === 'confirmed' ? 'duyệt' : 'từ chối'} hồ sơ`);
+      toast.success('Cập nhật', `Đã ${st === 'approved' ? 'duyệt' : 'từ chối'} hồ sơ`);
     } catch (e) {
       toast.error('Lỗi', 'Không thể cập nhật trạng thái hồ sơ');
     }
@@ -77,6 +137,18 @@ export default function ExamRegistrationPage() {
       }));
     } catch (e) {
       toast.error('Lỗi', 'Không thể cập nhật thanh toán');
+    }
+  };
+
+  const handleConfirmPayment = async () => {
+    if (!payModal) return;
+    try {
+      await registrationsApi.update(payModal.id, { ...payModal, feePaid: true });
+      setStudents(prev => prev.map(s => s.id === payModal.id ? { ...s, feePaid: true } : s));
+      toast.success('Thanh toán', `Đã ghi nhận nộp lệ phí thi cho ${payModal.fullName}`);
+      setPayModal(null);
+    } catch (e) {
+      toast.error('Lỗi', 'Không thể xác nhận thanh toán');
     }
   };
 
@@ -108,8 +180,8 @@ export default function ExamRegistrationPage() {
         <div className="page-actions">
           <button className="btn btn-ghost" onClick={handleExport}><FiDownload size={16} /> Xuất Excel</button>
           
-          <button className="btn btn-primary" onClick={() => document.getElementById('upload-ds').click()}>
-            <FiUpload size={16} /> Upload DS
+          <button className="btn btn-primary" onClick={handleAutoAssign}>
+            Tự động xếp phòng
           </button>
           <input 
             type="file" 
@@ -131,7 +203,7 @@ export default function ExamRegistrationPage() {
         {[
           { label: 'Tổng hồ sơ', value: students.length, color: 'var(--primary-400)' },
           { label: 'Chờ duyệt', value: students.filter(s => s.status === 'pending').length, color: 'var(--warning-400)' },
-          { label: 'Đã duyệt', value: students.filter(s => s.status === 'confirmed').length, color: 'var(--success-400)' },
+          { label: 'Đã duyệt', value: students.filter(s => s.status === 'approved').length, color: 'var(--success-400)' },
           { label: 'Đã đóng lệ phí', value: students.filter(s => s.feePaid).length, color: 'var(--accent-400)' },
         ].map((s, i) => (
           <div key={i} className="card" style={{ padding: '16px 20px' }}>
@@ -150,17 +222,9 @@ export default function ExamRegistrationPage() {
             <option value="">Tất cả trạng thái</option>
             {Object.entries(STATUS_MAP).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </select>
-          <select className="form-select" value={filterCert} onChange={e => setFilterCert(e.target.value)} style={{ width: 180 }}>
-            <option value="">Tất cả chứng chỉ</option>
-            {certs.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
-          </select>
           <select className="form-select" value={filterSession} onChange={e => setFilterSession(e.target.value)} style={{ width: 180 }}>
             <option value="">Tất cả đợt thi</option>
             {sessions.map(s => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
-          </select>
-          <select className="form-select" value={filterClass} onChange={e => setFilterClass(e.target.value)} style={{ width: 200 }}>
-            <option value="">Tất cả lớp</option>
-            {classes.map(c => <option key={c.id} value={String(c.id)}>{c.code}</option>)}
           </select>
         </div>
         <div className="toolbar-right">
@@ -196,10 +260,8 @@ export default function ExamRegistrationPage() {
                 <th>Ngày sinh</th>
                 <th>CCCD</th>
                 <th>Điện thoại</th>
-                <th>Lớp</th>
-                <th>Chứng chỉ</th>
                 <th>Đợt thi</th>
-                <th>Học phí</th>
+                <th>Phòng thi / Giờ thi</th>
                 <th>Lệ phí</th>
                 <th>Trạng thái</th>
                 <th style={{ width: 120, textAlign: 'center' }}>Thao tác</th>
@@ -217,15 +279,13 @@ export default function ExamRegistrationPage() {
                   <td style={{ color: 'var(--text-secondary)' }}>{formatDate(s.dob)}</td>
                   <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{s.cccd}</td>
                   <td>{s.phone}</td>
-                  <td style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>{s.className}</td>
-                  <td style={{ fontSize: '0.82rem' }}>{s.certName}</td>
                   <td>
                     <select 
                       className="form-select" 
                       style={{ padding: '2px 8px', fontSize: '0.78rem', height: 'auto', minWidth: 120 }}
                       value={s.examSessionId || ''}
                       onChange={async (e) => {
-                        const sid = e.target.value;
+                        const sid = e.target.value ? Number(e.target.value) : null;
                         try {
                           await registrationsApi.update(s.id, { ...s, examSessionId: sid });
                           setStudents(prev => prev.map(item => item.id === s.id ? { ...item, examSessionId: sid } : item));
@@ -242,19 +302,30 @@ export default function ExamRegistrationPage() {
                     </select>
                   </td>
                   <td>
-                    <button 
-                      className="btn btn-ghost btn-sm"
-                      style={{ 
-                        color: s.tuitionPaid ? 'var(--success-600)' : 'var(--danger-400)',
-                        fontWeight: 600,
-                        fontSize: '0.78rem',
-                        padding: '4px 8px',
-                        background: s.tuitionPaid ? 'var(--success-50)' : 'var(--danger-50)'
+                    <select 
+                      className="form-select" 
+                      style={{ padding: '2px 8px', fontSize: '0.78rem', height: 'auto', minWidth: 120 }}
+                      value={s.examRoomId || ''}
+                      onChange={async (e) => {
+                        const rid = e.target.value || null;
+                        try {
+                          await registrationsApi.update(s.id, { ...s, examRoomId: rid });
+                          setStudents(prev => prev.map(item => item.id === s.id ? { ...item, examRoomId: rid } : item));
+                          toast.success('Đã xếp phòng', s.fullName);
+                        } catch (err) {
+                          toast.error('Lỗi', 'Không thể xếp phòng');
+                        }
                       }}
-                      onClick={() => togglePayment(s.id, 'tuitionPaid')}
                     >
-                      {s.tuitionPaid ? '✓ Đã đóng' : '✗ Chưa đóng'}
-                    </button>
+                      <option value="">-- Chưa xếp --</option>
+                      {rooms.filter(r => String(r.session_id) === String(s.examSessionId)).map(room => {
+                        let name = 'Phòng';
+                        try { name = JSON.parse(room.supervisor || '{}').roomName || 'Phòng'; } catch {}
+                        return (
+                          <option key={room.id} value={String(room.id)}>{name} ({room.shift})</option>
+                        );
+                      })}
+                    </select>
                   </td>
                   <td>
                     <button 
@@ -266,7 +337,7 @@ export default function ExamRegistrationPage() {
                         padding: '4px 8px',
                         background: s.feePaid ? 'var(--success-50)' : 'var(--info-50)'
                       }}
-                      onClick={() => togglePayment(s.id, 'feePaid')}
+                      onClick={() => s.feePaid ? togglePayment(s.id, 'feePaid') : setPayModal(s)}
                     >
                       {s.feePaid ? '✓ Đã đóng' : '○ Chờ thu'}
                     </button>
@@ -279,7 +350,7 @@ export default function ExamRegistrationPage() {
                       </button>
                       {s.status === 'pending' && (
                         <>
-                          <button className="btn btn-ghost btn-icon-sm" title="Duyệt" onClick={() => updateStatus(s.id, 'confirmed')}>
+                          <button className="btn btn-ghost btn-icon-sm" title="Duyệt" onClick={() => updateStatus(s.id, 'approved')}>
                             <FiCheck size={14} style={{ color: 'var(--success-500)' }} />
                           </button>
                           <button className="btn btn-ghost btn-icon-sm" title="Từ chối" onClick={() => updateStatus(s.id, 'rejected')}>
@@ -319,11 +390,56 @@ export default function ExamRegistrationPage() {
         </div>
       )}
 
+      {payModal && (
+        <div className="modal-overlay" onClick={() => setPayModal(null)}>
+          <div className="modal" style={{ maxWidth: 500 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-body" style={{ padding: '30px 40px' }}>
+              <div style={{ background: 'var(--bg-secondary)', padding: '20px', borderRadius: 'var(--radius-md)', marginBottom: 24, border: '1px solid var(--border-color)' }}>
+                <h3 style={{ fontSize: '1.2rem', marginBottom: 12 }}>{payModal.fullName}</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                  <div>CCCD: <strong>{payModal.cccd}</strong></div>
+                  <div>SĐT: <strong>{payModal.phone}</strong></div>
+                  <div style={{ gridColumn: 'span 2' }}>Chứng chỉ: <strong>{payModal.certificateName}</strong></div>
+                </div>
+              </div>
+              
+              <div style={{ textAlign: 'center', padding: '20px', background: 'rgba(34,197,94,0.06)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(34,197,94,0.15)' }}>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: 4 }}>Số tiền học phí</div>
+                <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--success-600)' }}>
+                  {formatCurrency(payModal.fee || certs.find(c => String(c.id) === String(payModal.certificateId))?.fee || 0)}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'center', margin: '20px 0' }}>
+                <div style={{ width: 220, background: 'white', padding: 12, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                  <img
+                    src={`https://img.vietqr.io/image/970418-5601274934-compact.png?amount=${payModal.fee || certs.find(c => String(c.id) === String(payModal.certificateId))?.fee || 0}&addInfo=${encodeURIComponent(`SDC - ${payModal.fullName} - LPTCB ${sessions.find(s => String(s.id) === String(payModal.examSessionId))?.name || ''}`)}&accountName=TT PT PHAN MEM DAI HOC DA NANG`}
+                    alt="QR thanh toán"
+                    style={{ width: '100%', display: 'block' }}
+                  />
+                </div>
+              </div>
+
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', textAlign: 'center', margin: 0 }}>
+                Nhấn <strong>Xác nhận đã thu</strong> sau khi kiểm tra học viên đã chuyển khoản thành công.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={() => setPayModal(null)}>Hủy</button>
+              <button className="btn btn-primary" style={{ background: 'var(--success-500)' }} onClick={handleConfirmPayment}>
+                <FiCheckCircle size={16} /> Xác nhận đã thu tiền
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <EmailModal 
         isOpen={emailModalData !== null} 
         onClose={() => setEmailModalData(null)} 
         recipients={Array.isArray(emailModalData) ? emailModalData : (emailModalData ? [emailModalData] : [])} 
         extraData={{ 
+          context: 'exam',
           className: Array.isArray(emailModalData) ? 'Kỳ thi cấp chứng chỉ' : emailModalData?.certName || 'Kỳ thi cấp chứng chỉ'
         }}
       />

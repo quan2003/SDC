@@ -101,7 +101,7 @@ export default function LookupPage() {
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 12, textAlign: 'center', fontWeight: 600 }}>Quét mã để thanh toán ngay</div>
                       <div style={{ width: 150, height: 150, background: 'white', padding: 8, borderRadius: 'var(--radius-md)' }}>
                         <img 
-                          src={`https://img.vietqr.io/image/970418-5601274934-compact.png?amount=${result.fee}&addInfo=SDC ${result.cccd} ${result.fullName}&accountName=TT PT PHAN MEM DAI HOC DA NANG`}
+                          src={`https://img.vietqr.io/image/970418-5601274934-compact.png?amount=${result.fee}&addInfo=${encodeURIComponent(`SDC - ${result.fullName} - LPTCB ${result.examSessionName}`)}&accountName=TT PT PHAN MEM DAI HOC DA NANG`}
                           alt="QR Thanh Toán"
                           style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                         />

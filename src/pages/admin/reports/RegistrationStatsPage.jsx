@@ -1,208 +1,162 @@
 import { useState, useEffect, useMemo } from 'react';
-import { FiFileText, FiDownload, FiCalendar, FiFilter, FiSearch, FiPrinter } from 'react-icons/fi';
-import { registrationsApi, certificatesApi, examSessionsApi } from '../../../services/api';
+import { FiFileText, FiDownload, FiPrinter } from 'react-icons/fi';
+import { registrationsApi, certificatesApi, subjectsApi } from '../../../services/api';
 import { formatDate, formatCurrency } from '../../../utils/helpers';
 import { printPDF } from '../../../utils/pdfGenerator';
 
 export default function RegistrationStatsPage() {
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState([]);
+  const [allData, setAllData] = useState([]);
   const [certificates, setCertificates] = useState([]);
+  const [subjects, setSubjects] = useState([]);
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
 
   useEffect(() => {
-    loadData();
+    setLoading(true);
+    Promise.all([
+      registrationsApi.getAll(),
+      certificatesApi.getAll(),
+      subjectsApi.getAll()
+    ]).then(([regs, certs, subs]) => {
+      setAllData(regs || []);
+      setCertificates(certs || []);
+      setSubjects(subs || []);
+    }).finally(() => setLoading(false));
   }, []);
 
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const [regs, certs] = await Promise.all([
-        registrationsApi.getAll(),
-        certificatesApi.getAll()
-      ]);
-      setData(regs);
-      setCertificates(certs);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const stats = useMemo(() => {
-    // Basic filtering by date if provided
-    let filtered = data;
-    if (dateRange.start) {
-      filtered = filtered.filter(r => new Date(r.submittedAt) >= new Date(dateRange.start));
-    }
+  const { examRegs, courseRegs } = useMemo(() => {
+    let filtered = allData;
+    if (dateRange.start) filtered = filtered.filter(r => new Date(r.submittedAt) >= new Date(dateRange.start));
     if (dateRange.end) {
-      const end = new Date(dateRange.end);
-      end.setHours(23, 59, 59);
+      const end = new Date(dateRange.end); end.setHours(23, 59, 59);
       filtered = filtered.filter(r => new Date(r.submittedAt) <= end);
     }
+    return {
+      examRegs: filtered.filter(r => r.type !== 'course' && r.type !== 'course_registration'),
+      courseRegs: filtered.filter(r => r.type === 'course' || r.type === 'course_registration'),
+    };
+  }, [allData, dateRange]);
 
-    // Group by certificate
-    const byCert = certificates.map(c => {
-      const match = filtered.filter(r => String(r.certificateId) === String(c.id));
-      const count = match.length;
-      const approved = match.filter(r => r.status === 'confirmed' || r.status === 'approved').length;
-      return { ...c, total: count, approved };
+  // Nhóm đăng ký thi theo Chứng chỉ
+  const examByCert = useMemo(() => {
+    return certificates.map(c => {
+      const match = examRegs.filter(r => String(r.certificateId) === String(c.id));
+      return { name: c.name, total: match.length, approved: match.filter(r => r.status === 'approved').length, feePaid: match.filter(r => r.feePaid || r.paid).length };
     }).filter(c => c.total > 0);
+  }, [examRegs, certificates]);
 
-    return { total: filtered.length, byCert, filteredRecords: filtered };
-  }, [data, certificates, dateRange]);
-
-  const handlePrint = () => {
-    const html = `
-      <div style="font-family: 'Times New Roman', serif; padding: 40px; color: #000;">
-        <h1 style="text-align: center; margin-bottom: 5px;">THỐNG KÊ ĐĂNG KÝ HỌC</h1>
-        <p style="text-align: center; font-style: italic; margin-bottom: 30px;">
-          (Từ ngày: ${dateRange.start || '...'} đến ngày: ${dateRange.end || '...'})
-        </p>
-        
-        <div style="margin-bottom: 20px;">
-          <p><strong>Tổng số đăng ký:</strong> ${stats.total}</p>
-        </div>
-
-        <h3>1. Thống kê theo chứng chỉ</h3>
-        <table border="1" cellpadding="8" style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
-          <thead>
-            <tr style="background-color: #f2f2f2;">
-              <th>Chứng chỉ</th>
-              <th>Tổng hồ sơ</th>
-              <th>Đã duyệt</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${stats.byCert.map(c => `
-              <tr>
-                <td>${c.name}</td>
-                <td align="center">${c.total}</td>
-                <td align="center">${c.approved}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-
-        <h3>2. Chi tiết danh sách</h3>
-        <table border="1" cellpadding="8" style="width: 100%; border-collapse: collapse; font-size: 9pt;">
-          <thead>
-            <tr style="background-color: #f2f2f2;">
-              <th>STT</th>
-              <th>Tên học viên</th>
-              <th>Ngày sinh</th>
-              <th>CCCD</th>
-              <th>Điện thoại</th>
-              <th>Chứng chỉ</th>
-              <th>Trạng thái</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${stats.filteredRecords.map((r, i) => `
-              <tr>
-                <td align="center">${i + 1}</td>
-                <td>${r.fullName}</td>
-                <td align="center">${formatDate(r.dob)}</td>
-                <td align="center">${r.cccd}</td>
-                <td align="center">${r.phone}</td>
-                <td>${r.certificateName}</td>
-                <td align="center">${r.status === 'confirmed' || r.status === 'approved' ? 'Đã duyệt' : 'Chờ duyệt'}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>
-    `;
-    printPDF(html);
-  };
-
-  const exportToCSV = () => {
-    const headers = ['ID', 'Họ tên', 'Ngày sinh', 'Điện thoại', 'CCCD', 'Chứng chỉ', 'Ngày đăng ký', 'Trạng thái'];
-    const rows = data.map(r => [
-      r.id,
-      r.fullName,
-      r.dob,
-      r.phone,
-      r.cccd,
-      r.certificateName,
-      formatDate(r.submittedAt),
-      r.status === 'approved' ? 'Đã duyệt' : 'Chờ xử lý'
-    ]);
-    
-    let csvContent = "data:text/csv;charset=utf-8,\uFEFF" 
-      + headers.join(",") + "\n" 
-      + rows.map(e => e.join(",")).join("\n");
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "Thong_ke_dang_ky.csv");
-    document.body.appendChild(link);
-    link.click();
-  };
+  // Nhóm đăng ký học theo Môn học (subjectName trong other_request)
+  const courseBySubject = useMemo(() => {
+    const grouped = {};
+    courseRegs.forEach(r => {
+      const name = r.certificateName || 'Không xác định';
+      if (!grouped[name]) grouped[name] = { name, total: 0, approved: 0, paid: 0 };
+      grouped[name].total++;
+      if (r.status === 'approved') grouped[name].approved++;
+      if (r.paid || r.tuitionPaid) grouped[name].paid++;
+    });
+    return Object.values(grouped);
+  }, [courseRegs]);
 
   return (
     <div className="animate-fade-in-up">
       <div className="page-header">
-        <h1 className="page-title"><FiFileText /> Thống kê đăng ký học</h1>
+        <h1 className="page-title"><FiFileText /> Thống kê đăng ký</h1>
         <div className="page-actions" style={{ gap: 12 }}>
-          <button className="btn btn-outline" onClick={exportToCSV}>
-            <FiDownload /> Xuất CSV
-          </button>
-          <button className="btn btn-primary" onClick={handlePrint}>
-            <FiPrinter /> Xuất PDF
-          </button>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: '0.85rem' }}>
+            <span>Từ:</span>
+            <input type="date" className="form-input" value={dateRange.start} onChange={e => setDateRange(p => ({ ...p, start: e.target.value }))} style={{ width: 150 }} />
+            <span>Đến:</span>
+            <input type="date" className="form-input" value={dateRange.end} onChange={e => setDateRange(p => ({ ...p, end: e.target.value }))} style={{ width: 150 }} />
+            <button className="btn btn-ghost btn-sm" onClick={() => setDateRange({ start: '', end: '' })}>Xóa lọc</button>
+          </div>
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 24 }}>
-        <div className="toolbar" style={{ margin: 0 }}>
-          <div className="toolbar-left">
-            <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: '0.85rem' }}>Từ ngày:</span>
-              <input type="date" className="form-input" value={dateRange.start} onChange={e => setDateRange({...dateRange, start: e.target.value})} />
-              <span style={{ fontSize: '0.85rem' }}>Đến ngày:</span>
-              <input type="date" className="form-input" value={dateRange.end} onChange={e => setDateRange({...dateRange, end: e.target.value})} />
-              <button className="btn btn-ghost" onClick={() => setDateRange({start: '', end: ''})}>Xóa lọc</button>
-            </div>
+      {/* Tổng quan */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 28 }}>
+        {[
+          { label: 'Tổng hồ sơ', value: examRegs.length + courseRegs.length, color: 'var(--primary-500)' },
+          { label: 'Đăng ký thi', value: examRegs.length, color: 'var(--info-500)' },
+          { label: 'Đăng ký học', value: courseRegs.length, color: 'var(--success-500)' },
+          { label: 'Tổng doanh thu', value: formatCurrency([...examRegs, ...courseRegs].filter(r => r.paid || r.feePaid || r.tuitionPaid).reduce((s, r) => s + (r.fee || 0), 0)), color: 'var(--warning-500)' },
+        ].map((s, i) => (
+          <div key={i} className="card" style={{ padding: '16px 20px' }}>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: 6 }}>{s.label}</div>
+            <div style={{ fontSize: '1.2rem', fontWeight: 800, color: s.color }}>{s.value}</div>
           </div>
-          <div className="toolbar-right">
-             <div style={{ fontSize: '1.2rem', fontWeight: 700 }}>Tổng cộng: {stats.total}</div>
-          </div>
-        </div>
+        ))}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+        {/* Đăng ký thi */}
         <div className="card">
-          <h3 className="card-title" style={{ marginBottom: 20 }}>Theo loại chứng chỉ</h3>
-          <div className="table-container">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Chứng chỉ</th>
-                  <th style={{ textAlign: 'center' }}>Tổng hồ sơ</th>
-                  <th style={{ textAlign: 'center' }}>Đã duyệt</th>
+          <h3 style={{ marginBottom: 16, paddingBottom: 10, borderBottom: '2px solid var(--info-200)', color: 'var(--info-600)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            📋 Đăng ký thi — theo chứng chỉ
+          </h3>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Chứng chỉ</th>
+                <th style={{ textAlign: 'center' }}>Tổng hồ sơ</th>
+                <th style={{ textAlign: 'center' }}>Đã duyệt</th>
+                <th style={{ textAlign: 'center' }}>Đã nộp LP</th>
+              </tr>
+            </thead>
+            <tbody>
+              {examByCert.length === 0 ? (
+                <tr><td colSpan={4} style={{ textAlign: 'center', padding: 32, color: 'var(--text-tertiary)' }}>Không có dữ liệu</td></tr>
+              ) : examByCert.map((c, i) => (
+                <tr key={i}>
+                  <td><strong>{c.name}</strong></td>
+                  <td style={{ textAlign: 'center' }}>{c.total}</td>
+                  <td style={{ textAlign: 'center' }}><span className="badge badge-success">{c.approved}</span></td>
+                  <td style={{ textAlign: 'center' }}><span className="badge badge-active">{c.feePaid}</span></td>
                 </tr>
-              </thead>
-              <tbody>
-                {stats.byCert.map(c => (
-                  <tr key={c.id}>
-                    <td><strong>{c.name}</strong></td>
-                    <td style={{ textAlign: 'center' }}>{c.total}</td>
-                    <td style={{ textAlign: 'center' }}><span className="badge badge-success">{c.approved}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+              <tr style={{ fontWeight: 700, background: 'var(--bg-glass)' }}>
+                <td>TỔNG</td>
+                <td style={{ textAlign: 'center' }}>{examByCert.reduce((s, c) => s + c.total, 0)}</td>
+                <td style={{ textAlign: 'center' }}>{examByCert.reduce((s, c) => s + c.approved, 0)}</td>
+                <td style={{ textAlign: 'center' }}>{examByCert.reduce((s, c) => s + c.feePaid, 0)}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: 300 }}>
-           <div style={{ fontSize: '3rem', fontWeight: 800, color: 'var(--primary-400)' }}>
-             {((stats.total / (data.length || 1)) * 100).toFixed(0)}%
-           </div>
-           <div style={{ color: 'var(--text-tertiary)', marginTop: 8 }}>Tỷ lệ hồ sơ trong kỳ lọc</div>
+        {/* Đăng ký học */}
+        <div className="card">
+          <h3 style={{ marginBottom: 16, paddingBottom: 10, borderBottom: '2px solid var(--success-200)', color: 'var(--success-600)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            📚 Đăng ký học — theo môn học
+          </h3>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Môn học</th>
+                <th style={{ textAlign: 'center' }}>Tổng HV</th>
+                <th style={{ textAlign: 'center' }}>Đã duyệt</th>
+                <th style={{ textAlign: 'center' }}>Đã nộp HP</th>
+              </tr>
+            </thead>
+            <tbody>
+              {courseBySubject.length === 0 ? (
+                <tr><td colSpan={4} style={{ textAlign: 'center', padding: 32, color: 'var(--text-tertiary)' }}>Không có dữ liệu</td></tr>
+              ) : courseBySubject.map((s, i) => (
+                <tr key={i}>
+                  <td><strong>{s.name}</strong></td>
+                  <td style={{ textAlign: 'center' }}>{s.total}</td>
+                  <td style={{ textAlign: 'center' }}><span className="badge badge-success">{s.approved}</span></td>
+                  <td style={{ textAlign: 'center' }}><span className="badge badge-active">{s.paid}</span></td>
+                </tr>
+              ))}
+              <tr style={{ fontWeight: 700, background: 'var(--bg-glass)' }}>
+                <td>TỔNG</td>
+                <td style={{ textAlign: 'center' }}>{courseBySubject.reduce((s, c) => s + c.total, 0)}</td>
+                <td style={{ textAlign: 'center' }}>{courseBySubject.reduce((s, c) => s + c.approved, 0)}</td>
+                <td style={{ textAlign: 'center' }}>{courseBySubject.reduce((s, c) => s + c.paid, 0)}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

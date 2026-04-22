@@ -1,16 +1,15 @@
 import { useState, useMemo, useEffect } from 'react';
-import { FiEdit3, FiSearch, FiCheck, FiEye, FiPrinter, FiDownload, FiX, FiTrash2, FiChevronLeft, FiChevronRight, FiClock, FiAlertCircle } from 'react-icons/fi';
+import { FiEdit3, FiSearch, FiCheck, FiEye, FiPrinter, FiDownload, FiX, FiTrash2, FiChevronLeft, FiChevronRight, FiClock, FiAlertCircle, FiEdit2, FiCheckCircle, FiDollarSign } from 'react-icons/fi';
 import { useToast } from '../../../contexts/ToastContext';
 import { useAuth } from '../../../contexts/AuthContext';
 import { sendRealEmail } from '../../../utils/mailer';
 import { formatCurrency, formatDateTime, paginate, exportToExcel, formatDate } from '../../../utils/helpers';
 import { registrationsApi, certificatesApi } from '../../../services/api';
-import { generateReceiptHTML, printPDF } from '../../../utils/pdfGenerator';
+import { generateReceiptHTML, generateExamCardHTML, generateRegistrationFormHTML, printPDF, exportPDF } from '../../../utils/pdfGenerator';
 
 const STATUS_MAP = {
   pending: { label: 'Chờ xử lý', cls: 'badge-warning' },
-  confirmed: { label: 'Đã xác nhận', cls: 'badge-active' },
-  approved: { label: 'Đã phê duyệt', cls: 'badge-active' },
+  approved: { label: 'Đã xác nhận', cls: 'badge-active' },
   rejected: { label: 'Từ chối', cls: 'badge-inactive' },
 };
 
@@ -26,6 +25,9 @@ export default function OnlineExamRegistrationPage() {
   const [filterPaid, setFilterPaid] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [viewItem, setViewItem] = useState(null);
+  const [previewType, setPreviewType] = useState('card'); // 'card' or 'form'
+  const [editModal, setEditModal] = useState(null);
+  const [payModal, setPayModal] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const pageSize = 10;
 
@@ -38,7 +40,8 @@ export default function OnlineExamRegistrationPage() {
     setLoading(true);
     try {
       const res = await registrationsApi.getAll();
-      setData(res || []);
+      // Loại trừ hồ sơ đăng ký học để chỉ hiện đăng ký thi
+      setData((res || []).filter(r => r.type !== 'course' && r.type !== 'course_registration'));
     } catch (e) {
       toast.error('Lỗi', 'Không thể tải danh sách đăng ký');
     } finally {
@@ -59,17 +62,10 @@ export default function OnlineExamRegistrationPage() {
 
   const handleConfirm = async (id) => {
     try {
-      const item = data.find(r => r.id === id);
-      await registrationsApi.update(id, { ...item, status: 'confirmed' });
-      setData(prev => prev.map(r => r.id === id ? { ...r, status: 'confirmed' } : r));
-      toast.success('Đã xác nhận', 'Hồ sơ đăng ký thi đã được xác nhận');
-      
-      if (item && item.email) {
-        sendRealEmail({
-          to: item.email,
-          subject: 'SDC - Hồ sơ thi đã được duyệt',
-          body: `<h2>Chào ${item.fullName},</h2><p>Hồ sơ thi <b>${item.examModule || 'ứng dụng CNTT'}</b> đã được xác nhận.</p>`
-        }).catch(console.warn);
+      const res = await registrationsApi.updateStatus(id, 'approved');
+      if (res) {
+        setData(prev => prev.map(r => r.id === id ? { ...r, status: 'approved' } : r));
+        toast.success('Đã xác nhận', 'Hồ sơ đã được duyệt thành công');
       }
     } catch (e) {
       toast.error('Lỗi', 'Không thể xác nhận hồ sơ');
@@ -78,8 +74,7 @@ export default function OnlineExamRegistrationPage() {
 
   const handleReject = async (id) => {
     try {
-      const item = data.find(r => r.id === id);
-      await registrationsApi.update(id, { ...item, status: 'rejected' });
+      await registrationsApi.updateStatus(id, 'rejected');
       setData(prev => prev.map(r => r.id === id ? { ...r, status: 'rejected' } : r));
       toast.success('Đã từ chối', 'Hồ sơ đăng ký thi đã bị từ chối');
     } catch (e) {
@@ -87,14 +82,59 @@ export default function OnlineExamRegistrationPage() {
     }
   };
 
-  const handleMarkPaid = async (id) => {
+  const handleTogglePayment = async (item) => {
     try {
-      const item = data.find(r => r.id === id);
-      await registrationsApi.update(id, { ...item, feePaid: true });
-      setData(prev => prev.map(r => r.id === id ? { ...r, feePaid: true } : r));
-      toast.success('Đã xác nhận thanh toán', 'Lệ phí thi đã được ghi nhận');
+      const newValue = !item.feePaid;
+      await registrationsApi.updatePaymentStatus(item.id, newValue);
+      setData(prev => prev.map(r => r.id === item.id ? { ...r, feePaid: newValue } : r));
+      toast.success('Cập nhật', `Đã chuyển sang ${newValue ? 'Đã đóng lệ phí' : 'Chưa đóng lệ phí'}`);
     } catch (e) {
-      toast.error('Lỗi', 'Không thể cập nhập thanh toán');
+      toast.error('Lỗi', 'Không thể cập nhật trạng thái thanh toán');
+    }
+  };
+
+  const handleToggleStatus = async (item) => {
+    try {
+      const nextStatusMap = {
+        'pending': 'approved',
+        'approved': 'pending',
+        'rejected': 'pending'
+      };
+      const newStatus = nextStatusMap[item.status] || 'pending';
+      const res = await registrationsApi.updateStatus(item.id, newStatus);
+      if (res) {
+        setData(prev => prev.map(r => r.id === item.id ? { ...r, status: newStatus } : r));
+        toast.success('Cập nhật', `Hồ sơ đã chuyển sang: ${STATUS_MAP[newStatus].label}`);
+      }
+    } catch (e) {
+      toast.error('Lỗi', 'Không thể cập nhật trạng thái');
+    }
+  };
+
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+    if (!editModal) return;
+    try {
+      await registrationsApi.update(editModal.id, editModal);
+      setData(prev => prev.map(r => r.id === editModal.id ? editModal : r));
+      toast.success('Thành công', 'Đã cập nhật thông tin hồ sơ');
+      setEditModal(null);
+    } catch (e) {
+      toast.error('Lỗi', 'Không thể lưu thay đổi');
+    }
+  };
+
+  const handleConfirmPayment = async () => {
+    if (!payModal) return;
+    try {
+      const res = await registrationsApi.updatePaymentStatus(payModal.id, true);
+      if (res) {
+        setData(prev => prev.map(r => r.id === payModal.id ? { ...r, feePaid: true } : r));
+        toast.success('Tài chính', `Đã ghi nhận nộp tiền cho: ${payModal.fullName}`);
+      }
+      setPayModal(null);
+    } catch (e) {
+      toast.error('Lỗi', 'Không thể xác nhận thanh toán');
     }
   };
 
@@ -113,9 +153,32 @@ export default function OnlineExamRegistrationPage() {
   const stats = {
     total: data.length,
     pending: data.filter(r => r.status === 'pending').length,
-    confirmed: data.filter(r => r.status === 'confirmed').length,
+    confirmed: data.filter(r => r.status === 'approved').length,
     feePaid: data.filter(r => r.feePaid).length,
     totalFee: data.filter(r => r.feePaid).reduce((s, r) => s + r.fee, 0),
+  };
+
+  const renderOtherRequest = (val) => {
+    if (!val) return 'Không có';
+    if (typeof val === 'string' && !val.trim().startsWith('{')) return val;
+    
+    try {
+      const obj = typeof val === 'string' ? JSON.parse(val) : val;
+      // Chỉ lấy những trường thực sự là yêu cầu của người dùng
+      const userMsg = obj.other_request || obj.request || obj.message;
+      if (userMsg) return userMsg;
+      
+      // Nếu không có trường cụ thể, lọc bỏ các phím hệ thống
+      const systemKeys = ['source', 'type', 'birthPlace', 'subjectId', 'subjectName', 'fee', 'registeredAt', 'tuitionPaid', 'feePaid', 'examRoomId', 'examSessionId', 'rawOption', 'activityClassId'];
+      const filtered = Object.entries(obj).filter(([k]) => !systemKeys.includes(k) && obj[k]);
+      
+      if (filtered.length > 0) {
+        return filtered.map(([k, v]) => `${k}: ${v}`).join(', ');
+      }
+      return 'Không có';
+    } catch {
+      return String(val);
+    }
   };
 
   return (
@@ -200,39 +263,29 @@ export default function OnlineExamRegistrationPage() {
                   <td style={{ color: 'var(--text-tertiary)' }}>{(currentPage - 1) * pageSize + i + 1}</td>
                   <td>
                     <strong>{r.fullName}</strong>
-                    {r.examDate && <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>Thi: {r.examDate} — {r.roomName}</div>}
                   </td>
-                  <td style={{ fontSize: '0.82rem' }}>{r.certName || r.certificateName}</td>
+                  <td style={{ fontSize: '0.82rem' }}>{r.certificateName}</td>
                   <td style={{ color: 'var(--text-secondary)', fontSize: '0.82rem' }}>{r.school}</td>
                   <td style={{ color: 'var(--text-secondary)' }}>{r.phone}</td>
                   <td style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>{formatDateTime(r.submittedAt)}</td>
                   <td style={{ textAlign: 'center' }}>
-                    {r.feePaid
-                      ? <span className="badge badge-success">✓ {formatCurrency(r.fee)}</span>
-                      : <span className="badge badge-warning">✗ Chưa đóng</span>
-                    }
+                    <button className={`badge ${r.feePaid ? 'badge-success' : 'badge-warning'}`}>
+                      {r.feePaid ? `✓ ${formatCurrency(r.fee)}` : '○ Chờ thu'}
+                    </button>
                   </td>
-                  <td><span className={`badge ${STATUS_MAP[r.status]?.cls || 'badge-warning'}`}>{STATUS_MAP[r.status]?.label || r.status}</span></td>
+                  <td>
+                    <button className={`badge ${STATUS_MAP[r.status]?.cls || 'badge-warning'}`}>
+                      {STATUS_MAP[r.status]?.label || r.status}
+                    </button>
+                  </td>
                   <td>
                     <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
-                      <button className="btn btn-ghost btn-icon-sm" title="Xem chi tiết" onClick={() => setViewItem(r)}>
-                        <FiEye size={13} style={{ color: 'var(--primary-400)' }} />
+                      <button className="btn btn-ghost btn-icon-sm" title="Xem chi tiết & In" onClick={() => setViewItem(r)}>
+                        <FiEye size={13} style={{ color: 'var(--info-400)' }} />
                       </button>
-                      {r.status === 'pending' && (
-                        <>
-                          <button className="btn btn-ghost btn-icon-sm" title="Xác nhận" onClick={() => handleConfirm(r.id)}>
-                            <FiCheck size={13} style={{ color: 'var(--success-500)' }} />
-                          </button>
-                          <button className="btn btn-ghost btn-icon-sm" title="Từ chối" onClick={() => handleReject(r.id)}>
-                            <FiX size={13} style={{ color: 'var(--warning-400)' }} />
-                          </button>
-                        </>
-                      )}
-                      {!r.feePaid && r.status === 'confirmed' && (
-                        <button className="btn btn-ghost btn-icon-sm" title="Đánh dấu đã thu lệ phí" onClick={() => handleMarkPaid(r.id)}>
-                          <FiClock size={13} style={{ color: 'var(--accent-400)' }} />
-                        </button>
-                      )}
+                      <button className="btn btn-ghost btn-icon-sm" title="Chỉnh sửa" onClick={() => setEditModal({...r})}>
+                        <FiEdit2 size={13} style={{ color: 'var(--primary-400)' }} />
+                      </button>
                       {isAdmin && (
                         <button className="btn btn-ghost btn-icon-sm" title="Xóa" onClick={() => setDeleteConfirm(r)}>
                           <FiTrash2 size={13} style={{ color: 'var(--danger-400)' }} />
@@ -258,64 +311,89 @@ export default function OnlineExamRegistrationPage() {
         </div>
       )}
 
-      {/* View Detail Modal */}
+      {/* View Detail Modal với chức năng Xem Thẻ & Đơn (Dành riêng cho Đăng ký thi) */}
       {viewItem && (
         <div className="modal-overlay" onClick={() => setViewItem(null)}>
-          <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+          <div className="modal modal-xl" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="modal-title">Chi tiết hồ sơ đăng ký thi</h3>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <span className={`badge ${STATUS_MAP[viewItem.status]?.cls}`}>{STATUS_MAP[viewItem.status]?.label}</span>
-                <button className="modal-close" onClick={() => setViewItem(null)}><FiX /></button>
+              <h3 className="modal-title">Hồ sơ đăng ký: {viewItem.fullName}</h3>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button className={`tab ${previewType === 'card' ? 'active' : ''}`} onClick={() => setPreviewType('card')}>Thẻ dự thi</button>
+                <button className={`tab ${previewType === 'form' ? 'active' : ''}`} onClick={() => setPreviewType('form')}>Đơn đăng ký</button>
               </div>
+              <button className="modal-close" onClick={() => setViewItem(null)}><FiX /></button>
             </div>
-            <div className="modal-body">
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-                {viewItem.photo && (
-                  <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'center' }}>
-                    <img src={viewItem.photo} alt="Ảnh thẻ" style={{ width: 90, height: 120, objectFit: 'cover', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }} />
+            <div className="modal-body" style={{ background: '#f1f5f9', padding: 20 }}>
+              <div id="pdf-content" style={{ background: 'white', margin: '0 auto', padding: '10mm', width: '210mm', minHeight: '297mm', boxShadow: '0 0 20px rgba(0,0,0,0.1)' }}>
+                <div dangerouslySetInnerHTML={{ __html: previewType === 'card' ? generateExamCardHTML(viewItem) : generateRegistrationFormHTML(viewItem) }} />
+              </div>
+              
+              {/* Thêm phần hiển thị chi tiết bên dưới bản xem trước */}
+              <div className="card" style={{ marginTop: 24, padding: 20 }}>
+                <h4 style={{ marginBottom: 16, borderBottom: '1px solid var(--border-color)', paddingBottom: 8 }}>Thông tin bổ sung</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>Mã hồ sơ</div>
+                    <div style={{ fontWeight: 600 }}>{viewItem.code}</div>
                   </div>
-                )}
-                {[
-                  { label: 'Họ và tên', value: viewItem.fullName },
-                  { label: 'Ngày sinh', value: viewItem.dob },
-                  { label: 'Giới tính', value: viewItem.gender },
-                  { label: 'Dân tộc', value: viewItem.ethnicity },
-                  { label: 'Điện thoại', value: viewItem.phone },
-                  { label: 'Email', value: viewItem.email },
-                  { label: 'CCCD/CMT', value: viewItem.cccd },
-                  { label: 'Ngày cấp', value: viewItem.cccdDate },
-                  { label: 'Nơi cấp', value: viewItem.cccdPlace },
-                  { label: 'Nơi sinh', value: viewItem.birthPlace },
-                  { label: 'Trường', value: viewItem.school },
-                  { label: 'Lớp', value: viewItem.classGroup },
-                  { label: 'Chứng chỉ đăng ký', value: viewItem.certName || viewItem.certificateName },
-                  { label: 'Module thi', value: viewItem.examModule || 'Không có' },
-                  { label: 'Lệ phí', value: formatCurrency(viewItem.fee) },
-                  { label: 'Đã đóng lệ phí', value: viewItem.feePaid ? '✓ Đã đóng' : '✗ Chưa đóng' },
-                  { label: 'Yêu cầu khác', value: viewItem.otherRequest || 'Không có' },
-                  { label: 'Ngày đăng ký', value: formatDateTime(viewItem.submittedAt) },
-                ].map((f, i) => (
-                  <div key={i} style={{ fontSize: '0.88rem' }}>
-                    <div style={{ color: 'var(--text-tertiary)', marginBottom: 2 }}>{f.label}</div>
-                    <div style={{ fontWeight: 500 }}>{f.value || '—'}</div>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>Yêu cầu khác</div>
+                    <div style={{ fontWeight: 600, color: 'var(--primary-600)' }}>{renderOtherRequest(viewItem.otherRequest)}</div>
                   </div>
-                ))}
+                  <div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>Ngày nộp</div>
+                    <div style={{ fontWeight: 600 }}>{formatDateTime(viewItem.submittedAt)}</div>
+                  </div>
+                </div>
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-ghost" onClick={() => setViewItem(null)}>Đóng</button>
-              {viewItem.status === 'pending' && (
-                <>
-                  <button className="btn btn-danger btn-sm" onClick={() => { handleReject(viewItem.id); setViewItem(null); }}>Từ chối</button>
-                  <button className="btn btn-primary" onClick={() => { handleConfirm(viewItem.id); setViewItem(null); }}><FiCheck size={14} /> Xác nhận</button>
-                </>
-              )}
-              <button className="btn btn-ghost" onClick={async () => {
-                if (!viewItem.feePaid) await handleMarkPaid(viewItem.id);
-                printPDF(generateReceiptHTML(viewItem));
-              }}><FiPrinter size={14} /> In phiếu thu</button>
+               <button className="btn btn-ghost" onClick={() => setViewItem(null)}>Đóng</button>
+               <button className="btn btn-outline" onClick={() => {
+                const html = previewType === 'card' ? generateExamCardHTML(viewItem) : generateRegistrationFormHTML(viewItem);
+                printPDF(html);
+              }}><FiPrinter /> In ngay</button>
+              <button className="btn btn-primary" onClick={async () => {
+                const html = previewType === 'card' ? generateExamCardHTML(viewItem) : generateRegistrationFormHTML(viewItem);
+                const filename = previewType === 'card' ? `The_du_thi_${viewItem.fullName}.pdf` : `Don_dang_ky_${viewItem.fullName}.pdf`;
+                await exportPDF(html, filename);
+                toast.success('Thành công', 'Đã tải xuống PDF');
+              }}><FiDownload /> Tải bản mềm</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {editModal && (
+        <div className="modal-overlay" onClick={() => setEditModal(null)}>
+          <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Chỉnh sửa hồ sơ: {editModal.fullName}</h3>
+              <button className="modal-close" onClick={() => setEditModal(null)}><FiX /></button>
+            </div>
+            <form onSubmit={handleUpdate}>
+              <div className="modal-body">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <div className="form-group">
+                    <label className="form-label">Họ và tên</label>
+                    <input className="form-input" value={editModal.fullName} onChange={e => setEditModal({...editModal, fullName: e.target.value})} required />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Số CCCD</label>
+                    <input className="form-input" value={editModal.cccd} onChange={e => setEditModal({...editModal, cccd: e.target.value})} required />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Điện thoại</label>
+                    <input className="form-input" value={editModal.phone} onChange={e => setEditModal({...editModal, phone: e.target.value})} required />
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-ghost" onClick={() => setEditModal(null)}>Hủy</button>
+                <button type="submit" className="btn btn-primary"><FiCheck /> Lưu thay đổi</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -328,10 +406,10 @@ export default function OnlineExamRegistrationPage() {
               <div className="confirm-dialog">
                 <div className="confirm-icon danger"><FiTrash2 /></div>
                 <div className="confirm-title">Xác nhận xóa</div>
-                <div className="confirm-message">Xóa hồ sơ đăng ký thi của <strong>{deleteConfirm.fullName}</strong>? Hành động này không thể hoàn tác.</div>
-                <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                <div className="confirm-message">Xóa hồ sơ đăng ký thi của <strong>{deleteConfirm.fullName}</strong>?</div>
+                <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 24 }}>
                   <button className="btn btn-ghost" onClick={() => setDeleteConfirm(null)}>Hủy</button>
-                  <button className="btn btn-danger" onClick={handleDelete}><FiTrash2 size={14} /> Xóa</button>
+                  <button className="btn btn-danger" onClick={handleDelete}>Xóa</button>
                 </div>
               </div>
             </div>

@@ -45,27 +45,85 @@ export const certificatesApi = {
   }
 };
 
+const UDN_SCHOOLS = [
+  "Trường Đại học Bách khoa", "Trường Đại học Kinh tế", "Trường Đại học Sư phạm",
+  "Trường Đại học Ngoại ngữ", "Trường Đại học Sư phạm Kỹ thuật",
+  "Phân hiệu ĐHĐN tại Kon Tum", "Viện NCĐT Việt-Anh",
+  "Trường Đại học Công nghệ thông tin và Truyền thông Việt-Hàn", "Khoa Y Dược"
+];
+
+const calculateFee = (school, cert) => {
+  if (!cert) return 0;
+  const s = (school || '').trim().toLowerCase();
+  
+  // 1. Thí sinh tự do -> 500k
+  if (s === 'thí sinh tự do') return cert.fee_free || 500000;
+  
+  // 2. Sinh viên ĐH Đà Nẵng -> 300k
+  const isUDN = UDN_SCHOOLS.some(uds => uds.toLowerCase() === s) || 
+                s.includes('đại học đà nẵng') || 
+                s.includes('đhđn');
+                
+  if (isUDN) return 300000;
+  
+  // 3. Ngoài ĐHĐN (Mặc định cho các trường khác) -> 400k
+  return cert.fee_outside || 400000;
+};
+
 export const registrationsApi = {
   async getAll() {
     if (!supabase) return [];
     try {
-      const { data, error } = await supabase.from('registrations').select(`
-        *,
-        certificates (name, fee)
-      `).order('submitted_at', { ascending: false });
+      // Load subjects to fix missing fees for existing records
+      const [{ data, error }, sessions, subjects] = await Promise.all([
+        supabase.from('registrations').select(`
+          *,
+          certificates (name, fee)
+        `).order('submitted_at', { ascending: false }),
+        registrationsApi.getSessionsMap(),
+        subjectsApi.getAll()
+      ]);
       
       if (error) throw error;
       
+      // Create a map of subjectId -> tuition for quick lookup
+      const subjectFeeMap = {};
+      (subjects || []).forEach(s => { subjectFeeMap[String(s.id)] = s.tuition; });
+      
       return (data || []).map(r => {
-        // Handle both object and array response from Supabase Join
         const cert = Array.isArray(r.certificates) ? r.certificates[0] : r.certificates;
+        const parsed = (() => {
+           if (!r.other_request) return {};
+           if (typeof r.other_request === 'object') return r.other_request;
+           try { return JSON.parse(r.other_request); } catch { return {}; }
+        })();
+        
+        const sessId = parsed.examSessionId;
+        const sessionName = sessions[sessId] || '';
+        // Ưu tiên: nếu other_request có subjectId hoặc subjectName thì là đăng ký học
+        // Tránh fallback sai về 'exam' khi hồ sơ cũ không có field type
+        const hasCourseSignal = !!(parsed.subjectId || parsed.subjectName);
+        const regType = parsed.type || r.type || (hasCourseSignal ? 'course' : 'exam');
+        const isCourseRegistration = regType === 'course' || regType === 'course_registration';
+
+        
+        // Lấy thông tin môn học và học phí từ other_request
+        const displayName = isCourseRegistration ? (parsed.subjectName || cert?.name) : (cert?.name || 'Chưa xác định');
+        
+        // Fix: If fee is 0, try to look up from subjectFeeMap using subjectId
+        let displayFee = isCourseRegistration ? parseInt(parsed.fee || parsed.tuition || 0) : calculateFee(r.school, cert);
+        if (isCourseRegistration && displayFee === 0 && parsed.subjectId) {
+          displayFee = subjectFeeMap[String(parsed.subjectId)] || 0;
+        }
+
         return {
           ...r,
+          type: regType,
           fullName: r.full_name,
           dob: formatDate(r.dob),
           gender: r.gender,
           ethnicity: r.ethnicity,
-          birthPlace: r.birth_place,
+          birthPlace: r.birth_place || parsed.birthPlace,
           cccdDate: formatDate(r.cccd_date),
           cccdPlace: r.cccd_place,
           school: r.school,
@@ -75,12 +133,22 @@ export const registrationsApi = {
           submittedAt: r.submitted_at,
           paidAt: r.paid_at,
           certificateId: r.certificate_id,
-          certificateName: cert?.name || 'Chưa xác định',
-          fee: cert?.fee || 0,
+          // Gán giá trị chuẩn đã xử lý
+          certificateName: displayName,
+          fee: displayFee,
+          examSessionId: sessId,
+          examSessionName: sessionName,
           code: r.code || `HV${String(r.id).padStart(5, '0')}`,
           paid: r.paid,
-          feePaid: r.fee_paid ?? r.paid, // Fallback to 'paid' column
-          tuitionPaid: r.tuition_paid ?? r.paid, // Fallback to 'paid' column
+          ...(() => {
+             return {
+               feePaid: parsed.feePaid ?? r.paid,
+               tuitionPaid: parsed.tuitionPaid ?? r.paid,
+               examRoomId: parsed.examRoomId,
+               activityClassId: parsed.activityClassId,
+               rawOption: parsed.rawOption
+             };
+          })()
         };
       });
     } catch (err) {
@@ -89,26 +157,61 @@ export const registrationsApi = {
     }
   },
 
+  async getSessionsMap() {
+    try {
+       const { data } = await supabase.from('exam_sessions').select('id, name');
+       const map = {};
+       (data || []).forEach(s => map[s.id] = s.name);
+       return map;
+    } catch { return {}; }
+  },
+
   async findByQuery(query) {
     const q = query.trim();
     if (!supabase) return null;
     
-    try {
-      const { data, error } = await supabase
-        .from('registrations')
-        .select('*, certificates (name, fee)')
-        .or(`cccd.eq.${q},phone.eq.${q}`)
-        .maybeSingle();
+      try {
+        const [{ data, error }, sessions, subjects] = await Promise.all([
+          supabase
+            .from('registrations')
+            .select('*, certificates (name, fee)')
+            .or(`cccd.eq.${q},phone.eq.${q}`)
+            .order('submitted_at', { ascending: false })
+            .maybeSingle(),
+          registrationsApi.getSessionsMap(),
+          subjectsApi.getAll()
+        ]);
 
       if (error) throw error;
       if (!data) return null;
       
       const cert = Array.isArray(data.certificates) ? data.certificates[0] : data.certificates;
+      const parsed = (() => {
+         if (!data.other_request) return {};
+         if (typeof data.other_request === 'object') return data.other_request;
+         try { return JSON.parse(data.other_request); } catch { return {}; }
+      })();
+
+      const subjectFeeMap = {};
+      (subjects || []).forEach(s => { subjectFeeMap[String(s.id)] = s.tuition; });
+
+      const hasCourseSignal = !!(parsed.subjectId || parsed.subjectName);
+      const regType = parsed.type || data.type || (hasCourseSignal ? 'course' : 'exam');
+      const isCourseRegistration = regType === 'course' || regType === 'course_registration';
+
+      const displayName = isCourseRegistration ? (parsed.subjectName || cert?.name) : (cert?.name || 'Chưa xác định');
+      
+      let displayFee = isCourseRegistration ? parseInt(parsed.fee || parsed.tuition || 0) : calculateFee(data.school, cert);
+      if (isCourseRegistration && displayFee === 0 && parsed.subjectId) {
+        displayFee = subjectFeeMap[String(parsed.subjectId)] || 0;
+      }
+
       return {
         ...data,
+        type: regType,
         fullName: data.full_name,
         dob: formatDate(data.dob),
-        birthPlace: data.birth_place,
+        birthPlace: data.birth_place || parsed.birthPlace,
         gender: data.gender,
         ethnicity: data.ethnicity,
         cccdDate: formatDate(data.cccd_date),
@@ -117,15 +220,24 @@ export const registrationsApi = {
         classGroup: data.class_group,
         examModule: data.exam_module,
         otherRequest: data.other_request,
-        submittedAt: data.submitted_at,
-        paidAt: data.paid_at,
         certificateId: data.certificate_id,
-        certificateName: cert?.name || 'Chưa xác định',
-        fee: cert?.fee || 0,
+        certificateName: displayName,
+        fee: displayFee,
+        examSessionId: parsed.examSessionId,
+        examSessionName: sessions[parsed.examSessionId] || '',
         code: data.code || `HV${String(data.id).padStart(5, '0')}`,
         paid: data.paid,
-        feePaid: data.fee_paid ?? data.paid,
-        tuitionPaid: data.tuition_paid ?? data.paid,
+        submittedAt: data.submitted_at,
+        paidAt: data.paid_at,
+        ...(() => {
+           return {
+             feePaid: parsed.feePaid ?? data.paid,
+             tuitionPaid: parsed.tuitionPaid ?? data.paid,
+             examRoomId: parsed.examRoomId,
+             activityClassId: parsed.activityClassId,
+             rawOption: parsed.rawOption
+           };
+        })()
       };
     } catch (err) {
       console.error('Error in findByQuery:', err);
@@ -136,28 +248,34 @@ export const registrationsApi = {
   async create(payload) {
     if (!supabase) throw new Error('Supabase client not initialized');
     
+    // Safety check for existing columns in registrations table
     const dbPayload = {
-      full_name: payload.fullName,
-      dob: payload.dob, // Expects yyyy-mm-dd from client
-      gender: payload.gender,
-      ethnicity: payload.ethnicity,
+      full_name: payload.fullName || payload.full_name,
+      dob: payload.dob, 
+      gender: payload.gender || 'Khác',
+      ethnicity: payload.ethnicity || 'Kinh',
       phone: payload.phone,
       email: payload.email,
       cccd: payload.cccd,
-      cccd_date: payload.cccdDate || null,
-      cccd_place: payload.cccdPlace,
+      cccd_date: payload.cccdDate || payload.cccd_date || null,
+      cccd_place: payload.cccdPlace || payload.cccd_place || 'Việt Nam',
       school: payload.school,
-      class_group: payload.classGroup,
-      certificate_id: payload.certificateId,
-      exam_module: payload.examModule,
-      other_request: payload.otherRequest,
-      photo_base64: payload.photo,
-      status: 'pending',
-      paid: false
+      class_group: payload.classGroup || payload.class_group,
+      certificate_id: payload.certificateId || payload.certificate_id,
+      exam_module: payload.examModule || payload.exam_module,
+      other_request: payload.other_request || payload.otherRequest || JSON.stringify({
+         source: 'online_portal',
+         type: payload.type || 'exam',
+         photo: payload.photo
+      }),
+      paid: payload.paid || false
     };
 
     const { data, error } = await supabase.from('registrations').insert([dbPayload]).select();
-    if (error) throw error;
+    if (error) {
+      console.error('Database Error:', error);
+      throw error;
+    }
     return data[0];
   },
 
@@ -172,62 +290,86 @@ export const registrationsApi = {
     return true;
   },
 
-  async updatePaymentStatus(id, paidStatus) {
-    if (!supabase) return null;
-    const { data, error } = await supabase
-      .from('registrations')
-      .update({ paid: paidStatus, paid_at: new Date().toISOString() })
-      .eq('id', id)
-      .select();
-    if (error) throw error;
-    return data[0];
-  },
 
-  async updateStatus(id, newStatus) {
-    if (!supabase) return null;
-    const { data, error } = await supabase
-      .from('registrations')
-      .update({ status: newStatus })
-      .eq('id', id)
-      .select();
-    if (error) throw error;
-    return data[0];
-  },
 
   async update(id, payload) {
     if (!supabase) return payload;
+    
+    // Safety: ensure ID is integer if possible
+    const targetId = isNaN(id) ? id : parseInt(id);
+
+    // Minimize payload to only most certain columns
+    // Move suspicious columns into other_request JSON
     const dbPayload = {
-      full_name: payload.fullName,
-      dob: parseDate(payload.dob),
-      gender: payload.gender,
-      ethnicity: payload.ethnicity,
-      birth_place: payload.birthPlace,
+      full_name: payload.fullName || payload.full_name,
       phone: payload.phone,
       email: payload.email,
       cccd: payload.cccd,
-      cccd_date: parseDate(payload.cccdDate) || null,
-      cccd_place: payload.cccdPlace,
       school: payload.school,
-      class_group: payload.classGroup,
-      certificate_id: payload.certificateId,
-      exam_module: payload.examModule,
-      other_request: payload.otherRequest,
+      class_group: payload.classGroup || payload.class_group,
       status: payload.status,
-      paid: payload.paid,
-      activity_class_id: payload.activityClassId,
-      tuition_paid: payload.tuitionPaid,
-      fee_paid: payload.feePaid,
-      exam_session_id: payload.examSessionId,
+      paid: payload.paid ?? payload.feePaid,
+      certificate_id: payload.certificateId ? Number(payload.certificateId) : null,
+      other_request: (() => {
+        let obj = {};
+        const raw = payload.other_request || payload.otherRequest;
+        if (raw) {
+          try { obj = typeof raw === 'string' ? JSON.parse(raw) : { ...raw }; }
+          catch { obj = { rawData: raw }; }
+        }
+        // Save potentially missing columns into JSON instead of direct columns
+        if (payload.dob) obj.dob = payload.dob;
+        if (payload.gender) obj.gender = payload.gender;
+        if (payload.ethnicity) obj.ethnicity = payload.ethnicity;
+        if (payload.birthPlace) obj.birthPlace = payload.birthPlace;
+        if (payload.cccdDate) obj.cccdDate = payload.cccdDate;
+        if (payload.cccdPlace) obj.cccdPlace = payload.cccdPlace;
+        if (payload.examModule) obj.examModule = payload.examModule;
+        if (payload.feePaid !== undefined) obj.feePaid = payload.feePaid;
+        
+        return JSON.stringify(obj);
+      })(),
     };
 
-    const { data, error } = await supabase
-      .from('registrations')
-      .update(dbPayload)
-      .eq('id', id)
-      .select();
-
+    const { data, error } = await supabase.from('registrations').update(dbPayload).eq('id', targetId).select();
     if (error) throw error;
     return data[0];
+  },
+
+  async updateStatus(id, status) {
+    if (!supabase) return null;
+    const targetId = isNaN(id) ? id : parseInt(id);
+    const { data, error } = await supabase.from('registrations').update({ status }).eq('id', targetId).select();
+    if (error) throw error;
+    return data[0];
+  },
+
+  async updatePaymentStatus(id, paidStatus) {
+    if (!supabase) return null;
+    const targetId = isNaN(id) ? id : parseInt(id);
+    try {
+      const { data: current } = await supabase.from('registrations').select('other_request').eq('id', targetId).maybeSingle();
+      let other = {};
+      if (current?.other_request) {
+        try { other = JSON.parse(current.other_request); } catch(e) {}
+      }
+      other.feePaid = paidStatus;
+
+      const { data, error } = await supabase
+        .from('registrations')
+        .update({ 
+          paid: paidStatus, 
+          paid_at: paidStatus ? new Date().toISOString() : null,
+          other_request: JSON.stringify(other)
+        })
+        .eq('id', targetId)
+        .select();
+      if (error) throw error;
+      return data[0];
+    } catch (err) {
+      const { data } = await supabase.from('registrations').update({ paid: paidStatus }).eq('id', targetId).select();
+      return data?.[0];
+    }
   }
 };
 
@@ -242,6 +384,14 @@ export const createCrudApi = (tableName) => ({
         console.warn(`Supabase error for ${tableName}:`, error.message);
         return [];
       }
+
+      // Special handling for subjects to decode tuition from name
+      if (tableName === 'subjects') {
+        return (data || []).map(item => {
+          const [name, tuition] = (item.name || '').split('|');
+          return { ...item, name: name || item.name, tuition: parseInt(tuition) || 0 };
+        });
+      }
       return data || [];
     } catch (e) {
       console.error(`Catch in getAll for ${tableName}:`, e);
@@ -250,13 +400,72 @@ export const createCrudApi = (tableName) => ({
   },
   async create(payload) {
     if (!supabase) return { ...payload, id: Date.now() };
-    const { data, error } = await supabase.from(tableName).insert([payload]).select();
+    
+    let dbPayload = { ...payload };
+    
+    // Safety check for registrations table - only allow confirmed columns
+    if (tableName === 'registrations') {
+      const allowedCols = [
+        'full_name', 'dob', 'gender', 'ethnicity', 'phone', 'email', 'cccd', 
+        'cccd_date', 'cccd_place', 'school', 'class_group', 'exam_module', 
+        'other_request', 'certificate_id', 'paid'
+      ];
+      // Move any extra fields to other_request if they are not there yet
+      const extra = {};
+      const filtered = {};
+      Object.keys(dbPayload).forEach(key => {
+        if (allowedCols.includes(key)) {
+          filtered[key] = dbPayload[key];
+        } else if (key !== 'other_request') {
+          extra[key] = dbPayload[key];
+        }
+      });
+      
+      // Merge extras into other_request
+      const currentOther = JSON.parse(dbPayload.other_request || '{}');
+      filtered.other_request = JSON.stringify({ ...currentOther, ...extra });
+      dbPayload = filtered;
+    } else if (tableName === 'subjects') {
+      dbPayload.name = `${payload.name}|${payload.tuition || 0}`;
+      delete dbPayload.tuition;
+    }
+
+    const { data, error } = await supabase.from(tableName).insert([dbPayload]).select();
     if (error) throw error;
     return data[0];
   },
   async update(id, payload) {
     if (!supabase) return { ...payload, id };
-    const { data, error } = await supabase.from(tableName).update(payload).eq('id', id).select();
+    
+    let dbPayload = { ...payload };
+
+    if (tableName === 'registrations') {
+      const allowedCols = [
+        'full_name', 'dob', 'gender', 'ethnicity', 'phone', 'email', 'cccd', 
+        'cccd_date', 'cccd_place', 'school', 'class_group', 'exam_module', 
+        'other_request', 'certificate_id', 'paid'
+      ];
+      const extra = {};
+      const filtered = {};
+      Object.keys(dbPayload).forEach(key => {
+        if (allowedCols.includes(key)) {
+          filtered[key] = dbPayload[key];
+        } else if (key !== 'other_request' && key !== 'id') {
+          extra[key] = dbPayload[key];
+        }
+      });
+      
+      const currentOther = JSON.parse(dbPayload.other_request || '{}');
+      filtered.other_request = JSON.stringify({ ...currentOther, ...extra });
+      dbPayload = filtered;
+    } else if (tableName === 'subjects') {
+      const [cleanName] = (payload.name || '').split('|');
+      dbPayload.name = `${cleanName}|${payload.tuition || 0}`;
+      delete dbPayload.tuition;
+      if (dbPayload.fee !== undefined) delete dbPayload.fee;
+    }
+
+    const { data, error } = await supabase.from(tableName).update(dbPayload).eq('id', id).select();
     if (error) throw error;
     return data[0];
   },

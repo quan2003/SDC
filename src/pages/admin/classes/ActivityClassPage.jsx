@@ -28,7 +28,8 @@ export default function ActivityClassPage() {
       registrationsApi.getAll(),
       activityClassesApi.getAll()
     ]).then(([regs, clsArr]) => {
-      setStudents(regs || []);
+      // Lớp sinh hoạt học viên chỉ hiển thị hồ sơ đăng ký học
+      setStudents((regs || []).filter(r => r.type === 'course' || r.type === 'course_registration'));
       setClasses(clsArr || []);
       if (clsArr && clsArr.length > 0 && !selectedClassId) {
         setSelectedClassId(clsArr[0].id);
@@ -366,13 +367,12 @@ export default function ActivityClassPage() {
                 <th>Điện thoại</th>
                 <th>Trường</th>
                 <th>Học phí</th>
-                <th>Lệ phí</th>
                 <th style={{ textAlign: 'center' }}>Thao tác</th>
               </tr>
             </thead>
             <tbody>
               {paged.data.length === 0 ?
-                <tr><td colSpan={10} style={{ textAlign: 'center', padding: 40, color: 'var(--text-tertiary)' }}>Không có học viên</td></tr>
+                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 40, color: 'var(--text-tertiary)' }}>Không có học viên</td></tr>
               : paged.data.map(s => (
                 <tr key={s.id} className={selectedIds.includes(s.id) ? 'selected' : ''}>
                   <td><input type="checkbox" checked={selectedIds.includes(s.id)} onChange={() => toggleSelect(s.id)} style={{ accentColor: 'var(--primary-500)' }} /></td>
@@ -387,14 +387,6 @@ export default function ActivityClassPage() {
                       <span className="badge badge-active">Đã nộp</span> :
                       <button className="btn btn-warning btn-sm" style={{ padding: '2px 8px', fontSize: '0.7rem' }} onClick={() => handlePayTuition(s)}>
                         <FiDollarSign size={10} /> Nộp HP
-                      </button>
-                    }
-                  </td>
-                  <td>
-                    {s.feePaid ?
-                      <span className="badge badge-active">Đã nộp</span> :
-                      <button className="btn btn-accent btn-sm" style={{ padding: '2px 8px', fontSize: '0.7rem' }} onClick={() => handlePayFee(s)}>
-                        <FiDollarSign size={10} /> Nộp LP
                       </button>
                     }
                   </td>

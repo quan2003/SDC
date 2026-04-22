@@ -51,6 +51,7 @@ import AboutPage from './pages/client/AboutPage';
 import NoticesPage from './pages/client/NoticesPage';
 import LookupPage from './pages/client/LookupPage';
 import RegisterPage from './pages/client/RegisterPage';
+import CourseRegisterPage from './pages/client/CourseRegisterPage';
 import ContactPage from './pages/client/ContactPage';
 
 function ProtectedRoute({ children }) {
@@ -81,7 +82,8 @@ function AppRoutes() {
         <Route path="/gioi-thieu" element={<AboutPage />} />
         <Route path="/thong-bao" element={<NoticesPage />} />
         <Route path="/tra-cuu" element={<LookupPage />} />
-        <Route path="/dang-ky" element={<RegisterPage />} />
+        <Route path="/dang-ky-thi" element={<RegisterPage />} />
+        <Route path="/dang-ky-hoc" element={<CourseRegisterPage />} />
         <Route path="/lien-he" element={<ContactPage />} />
       </Route>
 

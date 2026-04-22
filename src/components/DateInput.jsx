@@ -83,13 +83,13 @@ export default function DateInput({ value, onChange, placeholder = "dd/mm/yyyy",
     <div style={{ position: 'relative', width: '100%', display: 'flex', alignItems: 'center' }}>
       <input
         type="text"
-        className={className}
+        className={`form-input ${className || ''}`}
         value={internalValue}
         placeholder={placeholder}
         onChange={handleChange}
         maxLength={10}
         inputMode="numeric"
-        style={{ paddingRight: 40, width: '100%' }}
+        style={{ paddingRight: 40, width: '100%', height: 48 }}
         {...props}
       />
       
