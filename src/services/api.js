@@ -128,7 +128,7 @@ export const registrationsApi = {
           certificates (id, name, fee, fee_ud, fee_outside, fee_freelance),
           exam_sessions (id, name),
           exam_rooms (id, shift, classrooms(name)),
-          subjects (id, name, tuition)
+          subjects!fk_registrations_subjects (id, name, tuition)
         `)
         .order('submitted_at', { ascending: false });
 
@@ -434,11 +434,12 @@ export const createCrudApi = (tableName) => ({
 
       let results = data || [];
 
-      // Special handling for subjects to decode tuition from name
+      // Special handling for subjects to decode tuition from name (fallback for old unmigrated data)
       if (tableName === 'subjects') {
         results = results.map(item => {
-          const [name, tuition] = (item.name || '').split('|');
-          return { ...item, name: name || item.name, tuition: parseInt(tuition) || 0 };
+          const parts = (item.name || '').split('|');
+          const parsedTuition = parts.length > 1 ? parseInt(parts[1]) : 0;
+          return { ...item, name: parts[0] ? parts[0].trim() : item.name, tuition: item.tuition || parsedTuition || 0 };
         });
       }
       

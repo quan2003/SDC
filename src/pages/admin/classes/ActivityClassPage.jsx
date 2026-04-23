@@ -4,7 +4,7 @@ import { useToast } from '../../../contexts/ToastContext';
 import { useAuth } from '../../../contexts/AuthContext';
 import { registrationsApi, activityClassesApi } from '../../../services/api';
 import { FiFolder, FiFolderPlus, FiFolderMinus, FiFileText } from 'react-icons/fi';
-import { filterBySearch, paginate, formatDate, formatCurrency, fileToBase64, exportToExcel } from '../../../utils/helpers';
+import { filterBySearch, paginate, formatDate, formatCurrency, fileToBase64, exportToExcel, parseDate } from '../../../utils/helpers';
 import EmailModal from '../../../components/EmailModal';
 
 export default function ActivityClassPage() {
@@ -91,7 +91,11 @@ export default function ActivityClassPage() {
 
   const openEdit = (item) => {
     setEditItem(item);
-    setFormData({ ...item });
+    setFormData({ 
+      ...item, 
+      dob: parseDate(item.dob) || '', 
+      cccdDate: parseDate(item.cccdDate) || '' 
+    });
     setModalOpen(true);
   };
 

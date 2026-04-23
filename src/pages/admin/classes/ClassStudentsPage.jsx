@@ -4,7 +4,7 @@ import { FiUsers, FiSearch, FiPlus, FiEdit2, FiTrash2, FiDownload, FiPrinter, Fi
 import { useToast } from '../../../contexts/ToastContext';
 import { useAuth } from '../../../contexts/AuthContext';
 import { registrationsApi, certificateClassesApi, subjectsApi } from '../../../services/api';
-import { filterBySearch, paginate, formatDate, formatCurrency, fileToBase64, exportToExcel } from '../../../utils/helpers';
+import { filterBySearch, paginate, formatDate, formatCurrency, fileToBase64, exportToExcel, parseDate } from '../../../utils/helpers';
 import EmailModal from '../../../components/EmailModal';
 import PageLoader from '../../../components/PageLoader';
 
@@ -90,7 +90,11 @@ export default function ClassStudentsPage() {
 
   const openEdit = (item) => {
     setEditItem(item);
-    setFormData({ ...item });
+    setFormData({ 
+      ...item, 
+      dob: parseDate(item.dob) || '', 
+      cccdDate: parseDate(item.cccdDate) || '' 
+    });
     setModalOpen(true);
   };
 
