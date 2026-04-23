@@ -125,9 +125,10 @@ export const registrationsApi = {
       const { data, error } = await supabase.from('registrations')
         .select(`
           *,
-          certificates (id, name, fee),
+          certificates (id, name, fee, fee_ud, fee_outside, fee_freelance),
           exam_sessions (id, name),
-          exam_rooms (id, shift, classrooms(name))
+          exam_rooms (id, shift, classrooms(name)),
+          subjects (id, name, tuition)
         `)
         .order('submitted_at', { ascending: false });
 
@@ -144,62 +145,62 @@ export const registrationsApi = {
       courseRegs.forEach((r, idx) => { courseMap[r.id] = idx + 1; });
 
       return (data || []).map(r => {
-        const cert = Array.isArray(r.certificates) ? r.certificates[0] : r.certificates;
+        const cert    = Array.isArray(r.certificates) ? r.certificates[0] : r.certificates;
         const session = Array.isArray(r.exam_sessions) ? r.exam_sessions[0] : r.exam_sessions;
-        const room = Array.isArray(r.exam_rooms) ? r.exam_rooms[0] : r.exam_rooms;
+        const room    = Array.isArray(r.exam_rooms)    ? r.exam_rooms[0]    : r.exam_rooms;
+        const subject = Array.isArray(r.subjects)      ? r.subjects[0]      : r.subjects;
         
         const seqNumber = r.type === 'course' ? courseMap[r.id] : examMap[r.id];
-        
-        // regType determination
         const isCourseRegistration = r.type === 'course' || r.type === 'course_registration';
 
-        // Với đăng ký học: cố gắng đọc tên môn học và học phí từ other_request (bản ghi cũ)
-        let courseSubjectName = null;
-        let courseFeeFromJson = 0;
-        if (isCourseRegistration && r.other_request) {
+        // Tên hiển thị: ưu tiên DB JOIN, fallback JSON (bản ghi cũ)
+        let fallbackName = null;
+        let fallbackFee  = 0;
+        if (isCourseRegistration && !subject?.name && r.other_request) {
           try {
             const or = typeof r.other_request === 'string' ? JSON.parse(r.other_request) : r.other_request;
-            courseSubjectName = or?.subjectName || null;
-            courseFeeFromJson = Number(or?.fee) || 0;
+            fallbackName = or?.subjectName || null;
+            fallbackFee  = Number(or?.fee) || 0;
           } catch {}
         }
 
         const displayName = isCourseRegistration
-          ? (courseSubjectName || r.certificate_name || cert?.name || 'Chưa xác định')
+          ? (subject?.name || fallbackName || cert?.name || 'Chưa xác định')
           : (cert?.name || 'Chưa xác định');
 
-        const displayFee = r.fee || (isCourseRegistration ? courseFeeFromJson : calculateFee(r.school, cert));
+        const displayFee = r.fee
+          || (isCourseRegistration ? (subject?.tuition || fallbackFee) : calculateFee(r.school, cert));
         
         return {
           ...r,
-          fullName: r.full_name,
-          dob: formatDate(r.dob),
-          gender: r.gender,
-          ethnicity: r.ethnicity,
-          birthPlace: r.birth_place,
-          cccdDate: formatDate(r.cccd_date),
-          cccdPlace: r.cccd_place,
-          school: r.school,
-          classGroup: r.class_group,
-          examModule: r.exam_module,
-          otherRequest: r.other_request,
-          submittedAt: r.submitted_at,
-          paidAt: r.paid_at,
-          certificateId: r.certificate_id,
+          fullName:        r.full_name,
+          dob:             formatDate(r.dob),
+          gender:          r.gender,
+          ethnicity:       r.ethnicity,
+          birthPlace:      r.birth_place,
+          cccdDate:        formatDate(r.cccd_date),
+          cccdPlace:       r.cccd_place,
+          school:          r.school,
+          classGroup:      r.class_group,
+          examModule:      r.exam_module,
+          otherRequest:    r.other_request,
+          submittedAt:     r.submitted_at,
+          paidAt:          r.paid_at,
+          certificateId:   r.certificate_id,
           certificateName: displayName,
-          fee: displayFee,
-          receiptNo: seqNumber,
-          examSessionId: r.exam_session_id,
+          fee:             displayFee,
+          receiptNo:       seqNumber,
+          examSessionId:   r.exam_session_id,
           examSessionName: session?.name || '',
-          examRoomId: r.exam_room_id,
-          examRoomName: room?.classrooms?.name || '',
-          code: r.code || `HV${String(r.id).padStart(5, '0')}`,
-          paid: r.paid,
-          feePaid: r.fee_paid || r.paid,
-          tuitionPaid: r.tuition_paid,
-          classId: r.class_id,
-          subjectId: r.subject_id,
-          photo: r.photo
+          examRoomId:      r.exam_room_id,
+          examRoomName:    room?.classrooms?.name || '',
+          code:            r.code || `HV${String(r.id).padStart(5, '0')}`,
+          paid:            r.paid,
+          feePaid:         r.fee_paid || r.paid,
+          tuitionPaid:     r.tuition_paid,
+          classId:         r.class_id,
+          subjectId:       r.subject_id,
+          photo:           r.photo
         };
       });
     } catch (err) {

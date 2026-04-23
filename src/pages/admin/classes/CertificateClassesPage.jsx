@@ -142,20 +142,32 @@ export default function CertificateClassesPage() {
   const handleOpenAssign = async (cls) => {
     try {
       const allRegs = await registrationsApi.getAll();
-      // Filter students who:
-      // 1. Registered for a COURSE (not exam)
-      // 2. Match the class certificate
-      // 3. Are not yet assigned to any class
       const subjectId = cls.subject_id || cls.subjectId;
-      const filtered = (allRegs || []).filter(r => {
-        const isCourse = (r.type === 'course' || r.type === 'course_registration');
-        const notAssigned = !r.activityClassId && !r.classId;
-        if (!isCourse || !notAssigned) return false;
 
-        // Lọc học viên dựa trên mã môn học khớp với lớp
-        // mapped from parsed.subjectId in registrationsApi.getAll
-        return String(r.subjectId || r.subject_id) === String(subjectId);
+      // Helper: nhận diện đăng ký học kể cả bản ghi cũ (type=null)
+      const isCourseReg = (r) => {
+        if (r.type === 'course' || r.type === 'course_registration') return true;
+        try {
+          const or = typeof r.otherRequest === 'string' ? JSON.parse(r.otherRequest) : r.otherRequest;
+          return or?.type === 'course' || (or?.source === 'online_portal' && or?.subjectId);
+        } catch { return false; }
+      };
+
+      // Helper: lấy subjectId kể cả từ other_request (bản ghi cũ chưa có subject_id trong DB)
+      const getSubjectId = (r) => {
+        if (r.subjectId || r.subject_id) return String(r.subjectId || r.subject_id);
+        try {
+          const or = typeof r.otherRequest === 'string' ? JSON.parse(r.otherRequest) : r.otherRequest;
+          return or?.subjectId ? String(or.subjectId) : null;
+        } catch { return null; }
+      };
+
+      const filtered = (allRegs || []).filter(r => {
+        if (!isCourseReg(r)) return false;
+        if (r.activityClassId || r.classId) return false;  // đã có lớp rồi
+        return getSubjectId(r) === String(subjectId);
       });
+
       setPendingStudents(filtered);
       setAssignModal(cls);
       setSelectedStudents([]);
@@ -163,6 +175,7 @@ export default function CertificateClassesPage() {
       toast.error('Lỗi', 'Không thể tải danh sách học viên');
     }
   };
+
 
   const handleBulkAssign = async () => {
     if (!assignModal || selectedStudents.length === 0) return;
