@@ -83,15 +83,26 @@ export function AuthProvider({ children }) {
     // Listen for auth state changes (login / logout / token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('[AuthContext] Auth event:', event);
+        
         try {
           if (session?.user) {
-            setLoading(true);
+            // Only show full-page loading if we don't have a profile yet (initial sign-in)
+            // This prevents the UI from flickering/reloading during background token refreshes
+            const isInitialSignIn = !user || !profile;
+            if (isInitialSignIn) setLoading(true);
+
             setUser(session.user);
-            // Delay for profile fetch on state change
-            await new Promise(r => setTimeout(r, 300));
-            const p = await fetchProfile(session.user);
-            setProfile(p);
+            
+            // If it's just a token refresh and we already have a profile, don't re-fetch unless needed
+            // or fetch it silently in the background
+            if (isInitialSignIn ) {
+              await new Promise(r => setTimeout(r, 300));
+              const p = await fetchProfile(session.user);
+              setProfile(p);
+            }
           } else {
+            // On sign out, clear everything
             setUser(null);
             setProfile(null);
           }
