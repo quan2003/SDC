@@ -37,7 +37,15 @@ export default function OnlineRegistrationPage() {
     try {
       const res = await registrationsApi.getAll();
       // Chỉ lấy hồ sơ đăng ký học
-      setData((res || []).filter(r => r.type === 'course' || r.type === 'course_registration'));
+      // Helper kiểm tra type kể cả fallback qua otherRequest JSON (bản ghi cũ có type=null)
+      const isCourseReg = (r) => {
+        if (r.type === 'course' || r.type === 'course_registration') return true;
+        try {
+          const or = typeof r.other_request === 'string' ? JSON.parse(r.other_request) : r.other_request;
+          return or?.type === 'course' || (or?.source === 'online_portal' && or?.subjectId);
+        } catch { return false; }
+      };
+      setData((res || []).filter(r => isCourseReg(r)));
     } catch (e) {
       toast.error('Lỗi', 'Không thể tải danh sách đăng ký học');
     } finally {
