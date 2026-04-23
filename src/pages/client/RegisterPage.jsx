@@ -122,12 +122,8 @@ export default function RegisterPage() {
       const newReg = await registrationsApi.create({
         ...form,
         type: 'exam',
-        otherRequest: JSON.stringify({
-          examRoomId: String(form.examRoomId),
-          rawOption: form.otherRequest
-        }),
-        certificateName: cert?.name || '',
         fee: calculatedFee,
+        otherRequest: form.otherRequest, // Plain text request from user
       });
 
       setSubmittedData({

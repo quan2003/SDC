@@ -17,38 +17,69 @@ export const certificatesApi = {
         console.warn('Supabase error for certificates:', error.message);
         return [];
       }
-      const results = data || [];
-      if (tableName === 'certificate_classes') {
-          return results.map(item => {
-              const [realName, insId] = (item.name || '').split('|');
-              return { 
-                  ...item, 
-                  name: realName, 
-                  instructor_id: insId || '', 
-                  instructorId: insId || '',
-                  subject_id: item.certificate_id,
-                  subjectId: item.certificate_id
-              };
-          });
-      }
-      return results;
+      // Decode fee fields encoded in description (format: desc|fee_ud|fee_outside|fee_freelance)
+      return (data || []).map(item => {
+        const parts = (item.description || '').split('|');
+        return {
+          ...item,
+          description: parts[0] || item.description,
+          fee_ud: parseInt(parts[1]) || 0,
+          fee_outside: parseInt(parts[2]) || 0,
+          fee_freelance: parseInt(parts[3]) || 0
+        };
+      });
     } catch (e) {
+      console.error('Error in certificatesApi.getAll:', e);
       return [];
     }
   },
 
   async create(payload) {
     if (!supabase) return { ...payload, id: Date.now() };
-    const { data, error } = await supabase.from('certificates').insert([payload]).select();
+    // Encode fee fields into description column (format: desc|fee_ud|fee_outside|fee_freelance)
+    const desc = (payload.description || '').split('|')[0];
+    const dbPayload = {
+      ...payload,
+      description: `${desc}|${payload.fee_ud || 0}|${payload.fee_outside || 0}|${payload.fee_freelance || 0}`
+    };
+    delete dbPayload.fee_ud;
+    delete dbPayload.fee_outside;
+    delete dbPayload.fee_freelance;
+    const { data, error } = await supabase.from('certificates').insert([dbPayload]).select();
     if (error) throw error;
-    return data[0];
+    const result = data[0];
+    const parts = (result.description || '').split('|');
+    return {
+      ...result,
+      description: parts[0] || result.description,
+      fee_ud: parseInt(parts[1]) || 0,
+      fee_outside: parseInt(parts[2]) || 0,
+      fee_freelance: parseInt(parts[3]) || 0
+    };
   },
 
   async update(id, payload) {
     if (!supabase) return { ...payload, id };
-    const { data, error } = await supabase.from('certificates').update(payload).eq('id', id).select();
+    // Encode fee fields into description column (format: desc|fee_ud|fee_outside|fee_freelance)
+    const cleanDesc = (payload.description || '').split('|')[0];
+    const dbPayload = {
+      ...payload,
+      description: `${cleanDesc}|${payload.fee_ud || 0}|${payload.fee_outside || 0}|${payload.fee_freelance || 0}`
+    };
+    delete dbPayload.fee_ud;
+    delete dbPayload.fee_outside;
+    delete dbPayload.fee_freelance;
+    const { data, error } = await supabase.from('certificates').update(dbPayload).eq('id', id).select();
     if (error) throw error;
-    return data[0];
+    const result = data[0];
+    const parts = (result.description || '').split('|');
+    return {
+      ...result,
+      description: parts[0] || result.description,
+      fee_ud: parseInt(parts[1]) || 0,
+      fee_outside: parseInt(parts[2]) || 0,
+      fee_freelance: parseInt(parts[3]) || 0
+    };
   },
 
   async delete(id) {
@@ -70,74 +101,66 @@ const calculateFee = (school, cert) => {
   if (!cert) return 0;
   const s = (school || '').trim().toLowerCase();
   
-  // 1. Thí sinh tự do -> 500k
-  if (s === 'thí sinh tự do') return cert.fee_free || 500000;
+  // 1. Thí sinh tự do
+  if (s.includes('tự do')) return cert.fee_freelance || 450000;
   
-  // 2. Sinh viên ĐH Đà Nẵng -> 300k
+  // 2. Thành viên/Sinh viên ĐH Đà Nẵng
   const isUDN = UDN_SCHOOLS.some(uds => uds.toLowerCase() === s) || 
                 s.includes('đại học đà nẵng') || 
-                s.includes('đhđn');
+                s.includes('đhđn') ||
+                s.includes('thành viên');
                 
-  if (isUDN) return 300000;
+  if (isUDN) return cert.fee_ud || 300000;
   
-  // 3. Ngoài ĐHĐN (Mặc định cho các trường khác) -> 400k
-  return cert.fee_outside || 400000;
+  // 3. Ngoài ĐHĐN (Sinh viên các trường ngoài hệ thống)
+  return cert.fee_outside || 350000;
 };
 
 export const registrationsApi = {
   async getAll() {
     if (!supabase) return [];
     try {
-      // Load subjects to fix missing fees for existing records
-      const [{ data, error }, sessions, subjects] = await Promise.all([
-        supabase.from('registrations').select(`
-          *,
-          certificates (name, fee)
-        `).order('submitted_at', { ascending: false }),
-        registrationsApi.getSessionsMap(),
-        subjectsApi.getAll()
-      ]);
+      if (!supabase) return [];
       
+      const { data, error } = await supabase.from('registrations')
+        .select(`
+          *,
+          certificates (id, name, fee),
+          exam_sessions (id, name),
+          exam_rooms (id, shift, classrooms(name))
+        `)
+        .order('submitted_at', { ascending: false });
+
       if (error) throw error;
       
-      // Create a map of subjectId -> tuition for quick lookup
-      const subjectFeeMap = {};
-      (subjects || []).forEach(s => { subjectFeeMap[String(s.id)] = s.tuition; });
+      // Tính toán số thứ tự cho từng hồ sơ theo loại
+      const examRegs = (data || []).filter(r => r.type !== 'course').reverse();
+      const courseRegs = (data || []).filter(r => r.type === 'course').reverse();
+
+      const examMap = {};
+      examRegs.forEach((r, idx) => { examMap[r.id] = idx + 1; });
       
+      const courseMap = {};
+      courseRegs.forEach((r, idx) => { courseMap[r.id] = idx + 1; });
+
       return (data || []).map(r => {
         const cert = Array.isArray(r.certificates) ? r.certificates[0] : r.certificates;
-        const parsed = (() => {
-           if (!r.other_request) return {};
-           if (typeof r.other_request === 'object') return r.other_request;
-           try { return JSON.parse(r.other_request); } catch { return {}; }
-        })();
+        const session = Array.isArray(r.exam_sessions) ? r.exam_sessions[0] : r.exam_sessions;
+        const room = Array.isArray(r.exam_rooms) ? r.exam_rooms[0] : r.exam_rooms;
         
-        const sessId = parsed.examSessionId;
-        const sessionName = sessions[sessId] || '';
-        // Ưu tiên: nếu other_request có subjectId hoặc subjectName thì là đăng ký học
-        // Tránh fallback sai về 'exam' khi hồ sơ cũ không có field type
-        const hasCourseSignal = !!(parsed.subjectId || parsed.subjectName);
-        const regType = parsed.type || r.type || (hasCourseSignal ? 'course' : 'exam');
-        const isCourseRegistration = regType === 'course' || regType === 'course_registration';
-
+        const seqNumber = r.type === 'course' ? courseMap[r.id] : examMap[r.id];
         
-        // Lấy thông tin môn học và học phí từ other_request
-        const displayName = isCourseRegistration ? (parsed.subjectName || cert?.name) : (cert?.name || 'Chưa xác định');
+        // regType determination
+        const isCourseRegistration = r.type === 'course' || r.type === 'course_registration';
+        const displayName = isCourseRegistration ? (r.certificate_name || cert?.name) : (cert?.name || 'Chưa xác định');
         
-        // Fix: If fee is 0, try to look up from subjectFeeMap using subjectId
-        let displayFee = isCourseRegistration ? parseInt(parsed.fee || parsed.tuition || 0) : calculateFee(r.school, cert);
-        if (isCourseRegistration && displayFee === 0 && parsed.subjectId) {
-          displayFee = subjectFeeMap[String(parsed.subjectId)] || 0;
-        }
-
         return {
           ...r,
-          type: regType,
           fullName: r.full_name,
           dob: formatDate(r.dob),
           gender: r.gender,
           ethnicity: r.ethnicity,
-          birthPlace: r.birth_place || parsed.birthPlace,
+          birthPlace: r.birth_place,
           cccdDate: formatDate(r.cccd_date),
           cccdPlace: r.cccd_place,
           school: r.school,
@@ -147,24 +170,20 @@ export const registrationsApi = {
           submittedAt: r.submitted_at,
           paidAt: r.paid_at,
           certificateId: r.certificate_id,
-          // Gán giá trị chuẩn đã xử lý
           certificateName: displayName,
-          fee: displayFee,
-          examSessionId: sessId,
-          examSessionName: sessionName,
+          fee: r.fee || calculateFee(r.school, cert),
+          receiptNo: seqNumber, // Số thứ tự tăng dần từ 1
+          examSessionId: r.exam_session_id,
+          examSessionName: session?.name || '',
+          examRoomId: r.exam_room_id,
+          examRoomName: room?.classrooms?.name || '',
           code: r.code || `HV${String(r.id).padStart(5, '0')}`,
           paid: r.paid,
-          ...(() => {
-             return {
-               feePaid: parsed.feePaid ?? r.paid,
-               tuitionPaid: parsed.tuitionPaid ?? r.paid,
-               examRoomId: parsed.examRoomId,
-               classId: parsed.classId || parsed.activityClassId,
-               activityClassId: parsed.activityClassId || parsed.classId,
-               subjectId: parsed.subjectId,
-               rawOption: parsed.rawOption
-             };
-          })()
+          feePaid: r.fee_paid || r.paid,
+          tuitionPaid: r.tuition_paid,
+          classId: r.class_id,
+          subjectId: r.subject_id,
+          photo: r.photo
         };
       });
     } catch (err) {
@@ -186,48 +205,35 @@ export const registrationsApi = {
     const q = query.trim();
     if (!supabase) return null;
     
-      try {
-        const [{ data, error }, sessions, subjects] = await Promise.all([
-          supabase
-            .from('registrations')
-            .select('*, certificates (name, fee)')
-            .or(`cccd.eq.${q},phone.eq.${q}`)
-            .order('submitted_at', { ascending: false })
-            .maybeSingle(),
-          registrationsApi.getSessionsMap(),
-          subjectsApi.getAll()
-        ]);
+    try {
+      const { data, error } = await supabase
+        .from('registrations')
+        .select('*, certificates(name, fee), exam_sessions(name)')
+        .or(`cccd.eq.${q},phone.eq.${q}`)
+        .order('submitted_at', { ascending: false })
+        .maybeSingle();
 
       if (error) throw error;
       if (!data) return null;
       
       const cert = Array.isArray(data.certificates) ? data.certificates[0] : data.certificates;
-      const parsed = (() => {
-         if (!data.other_request) return {};
-         if (typeof data.other_request === 'object') return data.other_request;
-         try { return JSON.parse(data.other_request); } catch { return {}; }
-      })();
-
-      const subjectFeeMap = {};
-      (subjects || []).forEach(s => { subjectFeeMap[String(s.id)] = s.tuition; });
-
-      const hasCourseSignal = !!(parsed.subjectId || parsed.subjectName);
-      const regType = parsed.type || data.type || (hasCourseSignal ? 'course' : 'exam');
-      const isCourseRegistration = regType === 'course' || regType === 'course_registration';
-
-      const displayName = isCourseRegistration ? (parsed.subjectName || cert?.name) : (cert?.name || 'Chưa xác định');
+      const sessionData = Array.isArray(data.exam_sessions) ? data.exam_sessions[0] : data.exam_sessions;
       
-      let displayFee = isCourseRegistration ? parseInt(parsed.fee || parsed.tuition || 0) : calculateFee(data.school, cert);
-      if (isCourseRegistration && displayFee === 0 && parsed.subjectId) {
-        displayFee = subjectFeeMap[String(parsed.subjectId)] || 0;
-      }
+      const isCourseRegistration = data.type === 'course' || data.type === 'course_registration';
+      const displayName = isCourseRegistration ? (data.certificate_name || cert?.name) : (cert?.name || 'Chưa xác định');
+
+      // Tính số thứ tự cho hồ sơ này
+      const { count } = await supabase
+        .from('registrations')
+        .select('*', { count: 'exact', head: true })
+        .eq('type', data.type)
+        .lte('submitted_at', data.submitted_at);
 
       return {
         ...data,
-        type: regType,
         fullName: data.full_name,
         dob: formatDate(data.dob),
-        birthPlace: data.birth_place || parsed.birthPlace,
+        birthPlace: data.birth_place,
         gender: data.gender,
         ethnicity: data.ethnicity,
         cccdDate: formatDate(data.cccd_date),
@@ -238,22 +244,20 @@ export const registrationsApi = {
         otherRequest: data.other_request,
         certificateId: data.certificate_id,
         certificateName: displayName,
-        fee: displayFee,
-        examSessionId: parsed.examSessionId,
-        examSessionName: sessions[parsed.examSessionId] || '',
+        fee: data.fee || calculateFee(data.school, cert),
+        receiptNo: count || 1, 
+        examSessionId: data.exam_session_id,
+        examSessionName: sessionData?.name || '',
+        examRoomId: data.exam_room_id,
         code: data.code || `HV${String(data.id).padStart(5, '0')}`,
         paid: data.paid,
+        feePaid: data.fee_paid || data.paid,
+        tuitionPaid: data.tuition_paid,
         submittedAt: data.submitted_at,
         paidAt: data.paid_at,
-        ...(() => {
-           return {
-             feePaid: parsed.feePaid ?? data.paid,
-             tuitionPaid: parsed.tuitionPaid ?? data.paid,
-             examRoomId: parsed.examRoomId,
-             activityClassId: parsed.activityClassId,
-             rawOption: parsed.rawOption
-           };
-        })()
+        classId: data.class_id,
+        subjectId: data.subject_id,
+        photo: data.photo
       };
     } catch (err) {
       console.error('Error in findByQuery:', err);
@@ -264,7 +268,6 @@ export const registrationsApi = {
   async create(payload) {
     if (!supabase) throw new Error('Supabase client not initialized');
     
-    // Safety check for existing columns in registrations table
     const dbPayload = {
       full_name: payload.fullName || payload.full_name,
       dob: payload.dob, 
@@ -275,124 +278,121 @@ export const registrationsApi = {
       cccd: payload.cccd,
       cccd_date: payload.cccdDate || payload.cccd_date || null,
       cccd_place: payload.cccdPlace || payload.cccd_place || 'Việt Nam',
+      birth_place: payload.birthPlace,
       school: payload.school,
       class_group: payload.classGroup || payload.class_group,
       certificate_id: payload.certificateId || payload.certificate_id,
-      exam_module: payload.examModule || payload.exam_module,
-      other_request: payload.other_request || payload.otherRequest || JSON.stringify({
-         source: 'online_portal',
-         type: payload.type || 'exam',
-         photo: payload.photo
-      }),
-      paid: payload.paid || false
+      exam_module: payload.examModule,
+      other_request: payload.otherRequest,
+      status: payload.status || 'pending',
+      type: payload.type || 'exam',
+      // Real database columns
+      code: payload.code,
+      exam_session_id: payload.examSessionId,
+      exam_room_id: payload.examRoomId,
+      fee_paid: payload.feePaid || false,
+      tuition_paid: payload.tuitionPaid || false,
+      paid: payload.paid || payload.feePaid || false,
+      fee: payload.fee || 0,
+      photo: payload.photo,
+      class_id: payload.classId,
+      subject_id: payload.subjectId,
     };
 
-    const { data, error } = await supabase.from('registrations').insert([dbPayload]).select();
+    // Fallback: nếu fee chưa có, tính toán tự động
+    if (!dbPayload.fee) {
+      const { data: certData } = await supabase.from('certificates').select('*').eq('id', dbPayload.certificate_id).maybeSingle();
+      if (certData) {
+        const parts = (certData.description || '').split('|');
+        const cert = {
+          ...certData,
+          fee_ud: parseInt(parts[1]) || 0,
+          fee_outside: parseInt(parts[2]) || 0,
+          fee_freelance: parseInt(parts[3]) || 0
+        };
+        dbPayload.fee = calculateFee(dbPayload.school, cert);
+      }
+    }
+
+    const { data: insertResult, error } = await supabase.from('registrations').insert([dbPayload]).select();
     if (error) {
       console.error('Database Error:', error);
       throw error;
     }
-    return data[0];
+    return insertResult[0];
   },
 
   async delete(id) {
     if (!supabase) return false;
-    // Ensure ID is passed in the correct format (handles both string and number)
-    const { error, count } = await supabase.from('registrations').delete().eq('id', id);
-    if (error) {
-      console.error('Error deleting registration:', error);
-      throw error;
-    }
+    const { error } = await supabase.from('registrations').delete().eq('id', id);
+    if (error) throw error;
     return true;
   },
 
-
-
   async update(id, payload) {
     if (!supabase) return payload;
-    
-    // Safety: ensure ID is integer if possible
     const targetId = isNaN(id) ? id : parseInt(id);
 
-    // Minimize payload to only most certain columns
-    // Move suspicious columns into other_request JSON
     const dbPayload = {
-      full_name: payload.fullName || payload.full_name,
+      full_name: payload.fullName,
+      dob: payload.dob,
+      gender: payload.gender,
+      ethnicity: payload.ethnicity,
       phone: payload.phone,
       email: payload.email,
       cccd: payload.cccd,
+      cccd_date: payload.cccdDate,
+      cccd_place: payload.cccdPlace,
+      birth_place: payload.birthPlace,
       school: payload.school,
-      class_group: payload.classGroup || payload.class_group,
+      class_group: payload.classGroup,
+      exam_module: payload.examModule,
+      certificate_id: payload.certificateId,
+      other_request: payload.otherRequest, 
       status: payload.status,
-      paid: payload.paid ?? payload.feePaid ?? payload.tuitionPaid,
-      certificate_id: payload.certificateId ? Number(payload.certificateId) : null,
-      other_request: (() => {
-        let obj = {};
-        const raw = payload.other_request || payload.otherRequest;
-        if (raw) {
-          try { obj = typeof raw === 'string' ? JSON.parse(raw) : { ...raw }; }
-          catch { obj = { rawData: raw }; }
-        }
-        // Save potentially missing columns into JSON instead of direct columns
-        if (payload.dob) obj.dob = payload.dob;
-        if (payload.gender) obj.gender = payload.gender;
-        if (payload.ethnicity) obj.ethnicity = payload.ethnicity;
-        if (payload.birthPlace) obj.birthPlace = payload.birthPlace;
-        if (payload.cccdDate) obj.cccdDate = payload.cccdDate;
-        if (payload.cccdPlace) obj.cccdPlace = payload.cccdPlace;
-        if (payload.examModule) obj.examModule = payload.examModule;
-        if (payload.feePaid !== undefined) obj.feePaid = payload.feePaid;
-        if (payload.tuitionPaid !== undefined) obj.tuitionPaid = payload.tuitionPaid;
-        // Bổ sung các ID lớp vào JSON
-        if (payload.classId) obj.classId = payload.classId;
-        if (payload.activityClassId) obj.activityClassId = payload.activityClassId;
-        if (payload.subjectId) obj.subjectId = payload.subjectId;
-        if (payload.subjectName) obj.subjectName = payload.subjectName;
-        if (payload.type) obj.type = payload.type;
-        
-        return JSON.stringify(obj);
-      })(),
+      type: payload.type,
+      // Direct columns
+      code: payload.code,
+      exam_session_id: payload.examSessionId,
+      exam_room_id: payload.examRoomId,
+      fee_paid: payload.feePaid,
+      tuition_paid: payload.tuitionPaid,
+      paid: payload.paid || payload.feePaid || payload.tuitionPaid,
+      fee: payload.fee,
+      photo: payload.photo,
+      class_id: payload.classId,
+      subject_id: payload.subjectId,
     };
 
-    const { data, error } = await supabase.from('registrations').update(dbPayload).eq('id', targetId).select();
+    // Filter out undefined values to avoid overwriting with null unless intended
+    const finalPayload = {};
+    Object.keys(dbPayload).forEach(key => {
+      if (dbPayload[key] !== undefined) finalPayload[key] = dbPayload[key];
+    });
+
+    const { data, error } = await supabase.from('registrations').update(finalPayload).eq('id', targetId).select();
     if (error) throw error;
     return data[0];
   },
 
   async updateStatus(id, status) {
-    if (!supabase) return null;
-    const targetId = isNaN(id) ? id : parseInt(id);
-    const { data, error } = await supabase.from('registrations').update({ status }).eq('id', targetId).select();
+    const { data, error } = await supabase.from('registrations').update({ status }).eq('id', id).select();
     if (error) throw error;
     return data[0];
   },
 
   async updatePaymentStatus(id, paidStatus) {
-    if (!supabase) return null;
-    const targetId = isNaN(id) ? id : parseInt(id);
-    try {
-      const { data: current } = await supabase.from('registrations').select('other_request').eq('id', targetId).maybeSingle();
-      let other = {};
-      if (current?.other_request) {
-        try { other = JSON.parse(current.other_request); } catch(e) {}
-      }
-      other.feePaid = paidStatus;
-
-      const { data, error } = await supabase
-        .from('registrations')
-        .update({ 
-          paid: paidStatus, 
-          paid_at: paidStatus ? new Date().toISOString() : null,
-          other_request: JSON.stringify(other)
-        })
-        .eq('id', targetId)
-        .select();
-      if (error) throw error;
-      return data[0];
-    } catch (err) {
-      const { data } = await supabase.from('registrations').update({ paid: paidStatus }).eq('id', targetId).select();
-      return data?.[0];
-    }
+    const { data, error } = await supabase
+      .from('registrations')
+      .update({ 
+        paid: paidStatus, 
+        fee_paid: paidStatus,
+        paid_at: paidStatus ? new Date().toISOString() : null 
+      })
+      .eq('id', id)
+      .select();
+    if (error) throw error;
+    return data[0];
   }
 };
 
@@ -439,6 +439,20 @@ export const createCrudApi = (tableName) => ({
           ...item,
           fullName: item.full_name || item.fullName
         }));
+      }
+
+      // Standardize certificates response
+      if (tableName === 'certificates') {
+        results = results.map(item => {
+          const parts = (item.description || '').split('|');
+          return {
+            ...item,
+            description: parts[0] || item.description,
+            fee_ud: parseInt(parts[1]) || 0,
+            fee_outside: parseInt(parts[2]) || 0,
+            fee_freelance: parseInt(parts[3]) || 0
+          };
+        });
       }
 
       return results;
@@ -496,12 +510,34 @@ export const createCrudApi = (tableName) => ({
         email: payload.email,
         status: payload.status
       };
+    } else if (tableName === 'certificates') {
+      const desc = payload.description || '';
+      dbPayload = {
+        ...payload,
+        description: `${desc}|${payload.fee_ud || 0}|${payload.fee_outside || 0}|${payload.fee_freelance || 0}`
+      };
+      delete dbPayload.fee_ud;
+      delete dbPayload.fee_outside;
+      delete dbPayload.fee_freelance;
     }
 
     const { data, error } = await supabase.from(tableName).insert([dbPayload]).select();
     if (error) throw error;
     
     const result = data[0];
+    if (tableName === 'instructors' && result) {
+        return { ...result, fullName: result.full_name };
+    }
+    if (tableName === 'certificates' && result) {
+        const parts = (result.description || '').split('|');
+        return {
+          ...result,
+          description: parts[0] || result.description,
+          fee_ud: parseInt(parts[1]) || 0,
+          fee_outside: parseInt(parts[2]) || 0,
+          fee_freelance: parseInt(parts[3]) || 0
+        };
+    }
     if (tableName === 'certificate_classes' && result) {
         return {
           ...result,
@@ -564,6 +600,17 @@ export const createCrudApi = (tableName) => ({
       Object.keys(payload).forEach(key => {
         if (map[key]) dbPayload[map[key]] = payload[key];
       });
+    } else if (tableName === 'certificates') {
+      const desc = payload.description || '';
+      // Clean description if it contains old markings
+      const cleanDesc = desc.split('|')[0];
+      dbPayload = {
+        ...payload,
+        description: `${cleanDesc}|${payload.fee_ud || 0}|${payload.fee_outside || 0}|${payload.fee_freelance || 0}`
+      };
+      delete dbPayload.fee_ud;
+      delete dbPayload.fee_outside;
+      delete dbPayload.fee_freelance;
     }
 
     const { data, error } = await supabase.from(tableName).update(dbPayload).eq('id', id).select();
@@ -586,6 +633,16 @@ export const createCrudApi = (tableName) => ({
     }
     if (tableName === 'instructors' && result) {
         return { ...result, fullName: result.full_name };
+    }
+    if (tableName === 'certificates' && result) {
+        const parts = (result.description || '').split('|');
+        return {
+          ...result,
+          description: parts[0] || result.description,
+          fee_ud: parseInt(parts[1]) || 0,
+          fee_outside: parseInt(parts[2]) || 0,
+          fee_freelance: parseInt(parts[3]) || 0
+        };
     }
     return result;
   },

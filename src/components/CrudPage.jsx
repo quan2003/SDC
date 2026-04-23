@@ -1,9 +1,50 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { FiSearch, FiPlus, FiEdit2, FiTrash2, FiCheck, FiX, FiChevronLeft, FiChevronRight, FiDownload, FiMoreVertical } from 'react-icons/fi';
 import { useToast } from '../contexts/ToastContext';
-import { filterBySearch, paginate, sortItems, translateError } from '../utils/helpers';
+import { filterBySearch, paginate, sortItems, translateError, formatCurrency } from '../utils/helpers';
 import DateInput from './DateInput';
 import PageLoader from './PageLoader';
+
+const CurrencyInput = ({ value, onChange, placeholder, className, required }) => {
+  const [displayValue, setDisplayValue] = useState('');
+
+  useEffect(() => {
+    if (value !== undefined && value !== null) {
+      const formatted = String(value).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      setDisplayValue(formatted);
+    }
+  }, [value]);
+
+  const handleChange = (e) => {
+    const rawVal = e.target.value.replace(/\./g, '');
+    if (rawVal === '' || /^\d+$/.test(rawVal)) {
+      onChange(rawVal === '' ? 0 : parseInt(rawVal));
+    }
+  };
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        type="text"
+        className={className}
+        value={displayValue}
+        onChange={handleChange}
+        placeholder={placeholder}
+        required={required}
+        style={{ paddingRight: 40 }}
+      />
+      <span style={{ 
+        position: 'absolute', 
+        right: 12, 
+        top: '50%', 
+        transform: 'translateY(-50%)', 
+        color: 'var(--text-tertiary)',
+        fontSize: '0.85rem',
+        fontWeight: 600
+      }}>đ</span>
+    </div>
+  );
+};
 
 /**
  * Generic CRUD page component for admin management pages
@@ -362,6 +403,13 @@ export default function CrudPage({
                         <DateInput
                           className="form-input"
                           value={formData[field.key] || ''}
+                          onChange={val => setFormData(prev => ({ ...prev, [field.key]: val }))}
+                          placeholder={field.placeholder}
+                        />
+                      ) : field.type === 'currency' || field.key.includes('fee') || field.key.includes('tuition') ? (
+                        <CurrencyInput
+                          className="form-input"
+                          value={formData[field.key]}
                           onChange={val => setFormData(prev => ({ ...prev, [field.key]: val }))}
                           placeholder={field.placeholder}
                         />

@@ -7,6 +7,7 @@ const navItems = [
   { path: '/gioi-thieu', label: 'Giới thiệu' },
   { path: '/thong-bao', label: 'Thông báo' },
   { path: '/tra-cuu', label: 'Tra cứu' },
+  { path: '/dang-ky-thi', label: 'Đăng ký thi' },
   { path: '/dang-ky-hoc', label: 'Đăng ký học' },
   { path: '/lien-he', label: 'Liên hệ' },
 ];
@@ -110,9 +111,13 @@ export default function ClientLayout() {
                   textDecoration: 'none',
                 })}
               >
+                {item.icon && <item.icon size={18} style={{ marginRight: 8 }} />}
                 {item.label}
               </NavLink>
             ))}
+            <Link to="/dang-ky-thi" className="btn btn-primary" style={{ marginTop: 8, width: '100%' }} onClick={() => setMobileMenu(false)}>
+               Đăng ký thi ngay
+            </Link>
           </div>
         )}
       </nav>

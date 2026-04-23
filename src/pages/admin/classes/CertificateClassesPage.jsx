@@ -169,11 +169,18 @@ export default function CertificateClassesPage() {
     setIsProcessing(true);
     try {
       const classId = assignModal.id;
+      const classCode = assignModal.code || 'Lớp';
+      const startSTT = (assignModal.current_students || assignModal.currentStudents || 0);
+
       // Update each student
-      for (const studentId of selectedStudents) {
+      for (let i = 0; i < selectedStudents.length; i++) {
+        const studentId = selectedStudents[i];
         const student = pendingStudents.find(s => s.id === studentId);
+        const generatedCode = `${classCode}.${String(startSTT + i + 1).padStart(2, '0')}`;
+        
         await registrationsApi.update(studentId, {
           ...student,
+          code: generatedCode, // Cấp mã mới theo lớp
           classId: classId,
           activityClassId: classId,
           status: 'approved'

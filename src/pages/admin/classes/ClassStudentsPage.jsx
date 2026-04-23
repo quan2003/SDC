@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FiUsers, FiSearch, FiPlus, FiEdit2, FiTrash2, FiDownload, FiPrinter, FiDollarSign, FiUpload, FiX, FiCheck, FiMail, FiRepeat, FiChevronLeft } from 'react-icons/fi';
+import { FiUsers, FiSearch, FiPlus, FiEdit2, FiTrash2, FiDownload, FiPrinter, FiDollarSign, FiUpload, FiX, FiCheck, FiMail, FiRepeat, FiChevronLeft, FiRefreshCw } from 'react-icons/fi';
 import { useToast } from '../../../contexts/ToastContext';
 import { useAuth } from '../../../contexts/AuthContext';
 import { registrationsApi, certificateClassesApi, subjectsApi } from '../../../services/api';
@@ -27,6 +27,7 @@ export default function ClassStudentsPage() {
   const [emailModalData, setEmailModalData] = useState(null);
   const [moveModal, setMoveModal] = useState(null); 
   const [targetMvId, setTargetMvId] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -100,9 +101,14 @@ export default function ClassStudentsPage() {
         setStudents(prev => prev.map(s => s.id === editItem.id ? { ...s, ...formData } : s));
         toast.success('Cập nhật thành công');
       } else {
-        const res = await registrationsApi.create(formData);
+        // Tự động tạo mã học viên theo định dạng MãLớp.STT
+        const nextNumber = students.length + 1;
+        const generatedCode = `${targetClass?.code || 'HV'}.${String(nextNumber).padStart(2, '0')}`;
+        const payload = { ...formData, code: generatedCode };
+        
+        const res = await registrationsApi.create(payload);
         setStudents(prev => [...prev, { ...res, fullName: res.full_name, dob: formatDate(res.dob) }]);
-        toast.success('Thêm học viên thành công');
+        toast.success('Thêm học viên thành công', `Mã HV: ${generatedCode}`);
       }
       setModalOpen(false);
     } catch (e) {
@@ -164,6 +170,35 @@ export default function ClassStudentsPage() {
     }
   };
 
+  const handleReorderCodes = async () => {
+    if (!students.length) return;
+    if (!window.confirm(`Bạn có chắc chắn muốn đánh lại toàn bộ Mã HV của ${students.length} học viên trong lớp này theo định dạng ${targetClass?.code}.xx?`)) return;
+    
+    setIsProcessing(true);
+    setLoading(true);
+    try {
+        const classCode = targetClass?.code || 'HV';
+        for (let i = 0; i < students.length; i++) {
+            const student = students[i];
+            const newCode = `${classCode}.${String(i + 1).padStart(2, '0')}`;
+            await registrationsApi.update(student.id, { ...student, code: newCode });
+        }
+        // Reload data
+        const res = await registrationsApi.getAll();
+        const classStudents = (res || []).filter(r => 
+            String(r.activityClassId) === String(classId) || 
+            String(r.classId) === String(classId)
+        );
+        setStudents(classStudents);
+        toast.success('Thành công', 'Đã chuẩn hóa toàn bộ Mã HV trong lớp');
+    } catch (e) {
+        toast.error('Lỗi', 'Không thể đánh lại mã học viên: ' + e.message);
+    } finally {
+        setLoading(false);
+        setIsProcessing(false);
+    }
+  };
+
   const handlePhotoUpload = async (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -218,6 +253,9 @@ export default function ClassStudentsPage() {
           </div>
         </div>
         <div className="toolbar-right" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+           <button className="btn btn-ghost btn-sm" onClick={handleReorderCodes} title="Cập nhật lại Mã HV cho toàn bộ hồ sơ trong lớp">
+             <FiRefreshCw size={14} style={{ marginRight: 6 }} /> Đánh lại mã HV
+           </button>
            {selectedIds.length > 0 && (
             <button className="btn btn-primary btn-sm" onClick={() => setEmailModalData(students.filter(s => selectedIds.includes(s.id)))}>
               <FiMail size={14} /> Gửi Email ({selectedIds.length})

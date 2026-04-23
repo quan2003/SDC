@@ -56,7 +56,7 @@ export default function HomePage() {
                 Trung tâm Phát triển Phần mềm - Đại học Đà Nẵng tổ chức đào tạo và cấp chứng chỉ ứng dụng Công nghệ Thông tin theo quy định của Bộ Giáo dục & Đào tạo.
               </p>
               <div style={{ display: 'flex', gap: 16 }}>
-                <Link to="/dang-ky" className="btn btn-primary btn-lg">
+                <Link to="/dang-ky-thi" className="btn btn-primary btn-lg">
                   Đăng ký ngay <FiArrowRight size={18} />
                 </Link>
                 <Link to="/tra-cuu" className="btn btn-ghost btn-lg">
@@ -146,7 +146,7 @@ export default function HomePage() {
                 <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', flex: 1, marginBottom: 16 }}>{cert.description}</p>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontWeight: 700, color: 'var(--warning-400)' }}>{new Intl.NumberFormat('vi-VN').format(cert.fee)}đ</span>
-                  <Link to="/dang-ky" className="btn btn-primary btn-sm">Đăng ký</Link>
+                  <Link to="/dang-ky-thi" className="btn btn-primary btn-sm">Đăng ký</Link>
                 </div>
               </div>
             ))}
@@ -194,7 +194,7 @@ export default function HomePage() {
                 Đăng ký dự thi chứng chỉ ứng dụng CNTT trực tuyến ngay hôm nay!
               </p>
               <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
-                <Link to="/dang-ky" className="btn btn-primary btn-lg">
+                <Link to="/dang-ky-thi" className="btn btn-primary btn-lg">
                   <FiAward size={18} /> Đăng ký dự thi
                 </Link>
                 <a href="tel:02363733588" className="btn btn-ghost btn-lg">

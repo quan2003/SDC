@@ -1,13 +1,33 @@
 import { useState } from 'react';
-import { FiSearch, FiUser, FiCheckCircle, FiClock, FiFileText } from 'react-icons/fi';
+import { FiSearch, FiUser, FiCheckCircle, FiClock, FiFileText, FiPrinter } from 'react-icons/fi';
 import { registrationsApi } from '../../services/api';
 import { formatCurrency, formatDateTime } from '../../utils/helpers';
+import { generateReceiptHTML, printPDF } from '../../utils/pdfGenerator';
 
 export default function LookupPage() {
   const [query, setQuery] = useState('');
   const [result, setResult] = useState(null);
   const [searched, setSearched] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const handlePrint = () => {
+    if (!result) return;
+    const html = generateReceiptHTML({
+      id: result.id,
+      receiptNo: result.receiptNo, // Số thứ tự từ 1
+      fullName: result.fullName,
+      dob: result.dob,
+      birthPlace: result.birthPlace,
+      phone: result.phone,
+      classGroup: result.classGroup,
+      certificateName: result.certificateName,
+      certName: result.certificateName,
+      examSessionName: result.examSessionName,
+      fee: result.fee,
+      isTuition: result.type === 'course',
+    });
+    printPDF(html);
+  };
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -94,7 +114,13 @@ export default function LookupPage() {
                         <FiCheckCircle size={30} style={{ color: 'var(--success-500)' }} />
                       </div>
                       <div style={{ fontWeight: 700, color: 'var(--success-600)', marginBottom: 8 }}>Thanh toán hoàn tất</div>
-                      <button className="btn btn-secondary btn-sm"><FiFileText /> In hóa đơn</button>
+                      <button 
+                        className="btn btn-secondary btn-sm" 
+                        onClick={handlePrint}
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, margin: '0 auto' }}
+                      >
+                        <FiPrinter size={14} /> In hóa đơn
+                      </button>
                     </div>
                   ) : (
                     <>

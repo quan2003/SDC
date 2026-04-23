@@ -356,128 +356,127 @@ export function generateReceiptHTML(data) {
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
-  const timeStr = `${day}/${month}/${year} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
   
   const isTuition = data.isTuition === true || data.type === 'tuition' || data.feeType === 'tuition';
-  const feePrefix = isTuition ? 'tuition' : 'exam';
   
-  // Generate or retrieve stable sequential receipt number
-  let receiptNo = localStorage.getItem(`receiptNo_${feePrefix}_${data.id}`);
-  if (!receiptNo) {
-    const counterKey = `receiptCounter_${feePrefix}`;
-    const startCounter = 1;
-    let counter = parseInt(localStorage.getItem(counterKey) || String(startCounter), 10);
-    // Format: PT-00001 (Tuition) or BL-00001 (Exam Fee/Bill)
-    const prefix = isTuition ? 'PT-' : 'BL-';
-    receiptNo = prefix + String(counter).padStart(5, '0');
-    localStorage.setItem(counterKey, String(counter + 1));
-    localStorage.setItem(`receiptNo_${feePrefix}_${data.id}`, receiptNo);
-  }
-
   const getFeeText = (fee) => {
     if (!fee) return '.......................................';
-    
-    const units = ['', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín'];
-    const amountStr = String(fee);
-
-    // Simple manual mapping for common values to be faster
     if (fee === 350000) return 'Ba trăm năm mươi nghìn đồng chẵn';
     if (fee === 300000) return 'Ba trăm nghìn đồng chẵn';
     if (fee === 1000000) return 'Một triệu đồng chẵn';
     if (fee === 400000) return 'Bốn trăm nghìn đồng chẵn';
-    if (fee === 250000) return 'Hai trăm năm mươi nghìn đồng chẵn';
-    
+    if (fee === 450000) return 'Bốn trăm năm mươi nghìn đồng chẵn';
+    if (fee === 500000) return 'Năm trăm nghìn đồng chẵn';
     return fee.toLocaleString('vi-VN') + ' đồng chẵn';
   };
 
   const nameUpper = (data.fullName || '').toUpperCase();
   const dobFormatted = formatDDMMYYYY(data.dob);
-  const birthPlace = (data.birthPlace || '').toUpperCase();
   const classVal = data.classGroup || data.className || '';
   const certVal = data.certName || data.certificateName || 'ứng dụng CNTT Cơ bản';
 
-  const noiDungThu = isTuition ? `Học phí lớp ${classVal}` : `Lệ phí thi cấp Chứng chỉ ${certVal}`;
+  const displayNo = data.receiptNo || 1;
+  const quyenSo = '....'; 
+
+  const noiDungThu = isTuition 
+    ? `Học phí môn ${certVal}` 
+    : `Lệ phí môn thi Chứng chỉ ${certVal}`;
+  
+  const sessionText = data.examSessionName ? ` đợt ${data.examSessionName}` : '';
   const lyDoNop = isTuition 
-    ? `Thu học phí khóa học` 
-    : `CK- Lệ phí thi ${certVal.replace('Chứng chỉ ', '')} đợt ${data.examSessionName || '...'}`;
+    ? `Thu học phí môn học` 
+    : `CK- Lệ phí thi ${certVal.replace('Chứng chỉ ', '').replace('ứng dụng ', '')}${sessionText}`;
 
   return `
-    <div style="font-family: 'Times New Roman', serif; color: #000; background: #fff; padding: 40px 50px; max-width: 800px; margin: 0 auto; font-size: 13pt; line-height: 1.4;">
-      
-      <!-- Header -->
-      <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
-        <div style="text-align: center; width: 45%;">
-          <div style="font-size: 12pt;">ĐẠI HỌC ĐÀ NẴNG</div>
-          <div style="font-weight: bold; font-size: 12pt;">TRUNG TÂM PHÁT TRIỂN PHẦN MỀM</div>
-          <div style="font-size: 12pt;">Địa chỉ: 41 Lê Duẩn - Đà Nẵng</div>
-          <div style="font-size: 12pt;"><u>Mã đơn vị có QHNS:....</u></div>
+    <style>
+      @media print {
+        @page { size: A4; margin: 0; }
+        body { margin: 0; padding: 0; }
+        .receipt-container { 
+          width: 210mm; 
+          min-height: 297mm;
+          padding: 15mm 25mm !important;
+          margin: 0 auto !important;
+          box-sizing: border-box;
+          background: #fff;
+        }
+      }
+      .receipt-table td { padding: 6px 0; line-height: 1.35; vertical-align: top; }
+    </style>
+    <div class="receipt-container" style="font-family: 'Times New Roman', serif; color: #000; background: #fff; padding: 30px 60px; max-width: 850px; margin: 0 auto; font-size: 12pt;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <div style="text-align: center; width: 52%;">
+          <div style="font-size: 11.5pt;">ĐẠI HỌC ĐÀ NẴNG</div>
+          <div style="font-weight: bold; font-size: 11.5pt;">TRUNG TÂM PHÁT TRIỂN PHẦN MỀM</div>
+          <div style="font-size: 10pt; margin-top: 2px;">Địa chỉ: 41 Lê Duẩn - Đà Nẵng</div>
+          <div style="font-size: 10pt;"><u>Mã đơn vị có QHNS:....</u></div>
         </div>
-        
-        <div style="text-align: center; width: 55%; font-size: 11pt;">
-          <div style="font-weight: bold; font-size: 12pt;">Mẫu số C38 - BB</div>
-          <div>(Ban hành theo QĐ số 19/2006/QĐ-BTC ngày 30/03/2006</div>
-          <div>của Bộ trưởng BTC và sửa đổi bổ sung theo TT số</div>
-          <div>185/2010/TT-BTC ngày 15/11/2010 của Bộ trưởng BTC)</div>
-          <div>Quyển số: ....</div>
-          <div style="font-weight: bold; font-size: 12pt;">Số: ${receiptNo}</div>
+        <div style="text-align: center; width: 45%; font-size: 10pt;">
+          <div style="font-weight: bold; font-size: 11pt;">Mẫu số C38 - BB</div>
+          <div style="font-size: 9.5pt; line-height: 1.1;">(Ban hành theo QĐ số 19/2006/QĐ-BTC ngày 30/03/2006</div>
+          <div style="font-size: 9.5pt; line-height: 1.1;">của Bộ trưởng BTC và sửa đổi bổ sung theo TT số</div>
+          <div style="font-size: 9.5pt; line-height: 1.1;">185/2010/TT-BTC ngày 15/11/2010 của Bộ trưởng BTC)</div>
+          <div style="margin-top: 4px;">Quyển số: ${quyenSo}</div>
+          <div style="font-weight: bold; font-size: 13pt; color: #000; margin-top: 1px;">Số: ${displayNo}</div>
         </div>
       </div>
 
-      <!-- Title -->
-      <div style="text-align: center; margin: 30px 0;">
-        <div style="font-weight: bold; font-size: 17pt; letter-spacing: 0.5px;">BIÊN LAI THU TIỀN</div>
-        <div style="font-style: italic; font-size: 13pt; margin-top: 2px;">
+      <div style="text-align: center; margin: 30px 0 25px;">
+        <div style="font-weight: bold; font-size: 20pt; letter-spacing: 1px;">BIÊN LAI THU TIỀN</div>
+        <div style="font-style: italic; font-size: 13pt; margin-top: 5px;">
           Ngày ${day} tháng ${month} năm ${year}
         </div>
       </div>
 
-      <!-- Body -->
-      <table style="width: 100%; font-size: 13pt; border-collapse: collapse; margin-bottom: 20px;">
-        <tbody>
-          <tr>
-            <td style="width: 32%; padding: 3px 0;">Họ và tên người nộp tiền</td>
-            <td style="width: 68%; padding: 3px 0; font-weight: bold;">${nameUpper} (${dobFormatted}, ${birthPlace})</td>
-          </tr>
-          <tr>
-            <td style="padding: 3px 0;">Tên lớp</td>
-            <td style="padding: 3px 0;">${classVal}</td>
-          </tr>
-          <tr>
-            <td style="padding: 3px 0;">Nội dung thu</td>
-            <td style="padding: 3px 0;">${noiDungThu}</td>
-          </tr>
-          <tr>
-            <td style="padding: 3px 0;">Lý do nộp</td>
-            <td style="padding: 3px 0;">${lyDoNop}</td>
-          </tr>
-          <tr>
-            <td style="padding: 3px 0;">Số tiền thu</td>
-            <td style="padding: 3px 0;">${(data.fee || 300000).toLocaleString('vi-VN')}</td>
-          </tr>
-          <tr>
-            <td style="padding: 3px 0;">Viết bằng chữ</td>
-            <td style="padding: 3px 0; font-weight: 500;">${getFeeText(data.fee || 300000)}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div style="margin: 25px 0;">
+        <table class="receipt-table" style="width: 100%; border-collapse: collapse;">
+          <tbody>
+            <tr>
+              <td style="width: 32%;">Họ và tên người nộp tiền:</td>
+              <td style="width: 68%; font-weight: bold; text-transform: uppercase;">
+                ${nameUpper} ${dobFormatted ? `(${dobFormatted}${data.birthPlace ? `, ${data.birthPlace.toUpperCase()}` : ''})` : ''}
+              </td>
+            </tr>
+            <tr>
+              <td>Tên lớp:</td>
+              <td style="font-weight: 500;">${classVal || '...................................................'}</td>
+            </tr>
+            <tr>
+              <td>Nội dung thu:</td>
+              <td>${noiDungThu}</td>
+            </tr>
+            <tr>
+              <td>Lý do nộp:</td>
+              <td>${lyDoNop}</td>
+            </tr>
+            <tr>
+              <td>Số tiền thu:</td>
+              <td style="font-weight: bold; font-size: 14pt;">${(data.fee ? Number(data.fee) : 0).toLocaleString('vi-VN')}</td>
+            </tr>
+            <tr>
+              <td>Viết bằng chữ:</td>
+              <td style="font-style: italic;">${getFeeText(data.fee)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
-      <!-- Signatures -->
-      <div style="display: flex; justify-content: space-between; text-align: center; margin-top: 20px;">
-        <div style="flex: 1;">
-          <div style="font-weight: bold; font-size: 13pt;">Người nộp tiền</div>
-          <div style="font-style: italic; font-size: 13pt;">(Ký, ghi rõ họ tên)</div>
+      <div style="display: flex; justify-content: space-between; text-align: center; margin-top: 45px; page-break-inside: avoid;">
+        <div style="width: 45%;">
+          <div style="font-weight: bold;">Người nộp tiền</div>
+          <div style="font-style: italic; font-size: 11pt; margin-bottom: 95px;">(Ký, ghi rõ họ tên)</div>
+          <div style="font-weight: bold; text-transform: uppercase;">${data.fullName}</div>
         </div>
-        <div style="flex: 1;">
-          <div style="font-weight: bold; font-size: 13pt;">Người thu tiền</div>
-          <div style="font-style: italic; font-size: 13pt;">(Ký, ghi rõ họ tên)</div>
-          <div style="margin-top: 70px; font-weight: bold; font-size: 13pt; margin-left: 20px;">Nguyễn Thị Loan</div>
+        <div style="width: 45%;">
+          <div style="font-weight: bold;">Người thu tiền</div>
+          <div style="font-style: italic; font-size: 11pt; margin-bottom: 95px;">(Ký, ghi rõ họ tên)</div>
+          <div style="font-weight: bold;">Nguyễn Thị Loan</div>
         </div>
       </div>
       
-      <!-- Generated Time Note -->
-      <div style="margin-top: 40px; text-align: center;">
-        <div style="font-size: 12pt;">${timeStr}</div>
-        <div style="font-style: italic; font-size: 12pt;">Lưu ý: Cá nhân tự bảo quản biên lai để xuất trình khi cần thiết, mất không cấp lại.</div>
+      <div style="margin-top: 90px; text-align: center; font-size: 11pt; color: #000; border-top: 1px dashed #ccc; padding-top: 20px;">
+        <div style="margin-bottom: 8px;">${day}/${month}/${year} ${new Date().toLocaleTimeString('vi-VN', {hour12: false})}</div>
+        <div style="font-style: italic;">Lưu ý: Cá nhân tự bảo quản biên lai để xuất trình khi cần thiết, mất không cấp lại.</div>
       </div>
     </div>
   `;
