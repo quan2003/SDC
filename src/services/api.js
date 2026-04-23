@@ -745,11 +745,16 @@ export const usersApi = {
     if (!supabase) return { ...payload, id };
     
     // Admin quyền lực có thể đổi mật khẩu và Email (cần supabaseAdmin)
-    if (payload.password || payload.email) {
+    const isChangingEmail = payload.email && payload.email !== 'Đã ẩn bảo mật';
+    if (payload.password || isChangingEmail) {
       if (!supabaseAdmin) throw new Error('Chưa cấu hình Service Role Key để cập nhật mật khẩu/email bảo mật!');
       const updateAuth = {};
       if (payload.password) updateAuth.password = payload.password;
-      if (payload.email) {
+      if (isChangingEmail) {
+        // Kiểm tra đuôi email nếu có ràng buộc
+        if (payload.email !== 'admin@sdc.udn.vn' && !payload.email.endsWith('@sdc.udn.vn')) {
+          throw new Error('Email nhân viên phải có đuôi @sdc.udn.vn');
+        }
         updateAuth.email = payload.email;
         updateAuth.email_confirm = true;
       }
