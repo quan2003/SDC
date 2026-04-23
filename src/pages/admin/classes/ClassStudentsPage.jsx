@@ -128,8 +128,8 @@ export default function ClassStudentsPage() {
 
   const handlePayTuition = async (item) => {
     try {
-      await registrationsApi.update(item.id, { ...item, tuitionPaid: true });
-      setStudents(prev => prev.map(s => s.id === item.id ? { ...s, tuitionPaid: true } : s));
+      await registrationsApi.updatePaymentStatus(item.id, true);
+      setStudents(prev => prev.map(s => s.id === item.id ? { ...s, paid: true, tuitionPaid: true } : s));
       toast.success('Đã nộp học phí', item.fullName);
     } catch (e) {
       toast.error('Lỗi', 'Không thể cập nhật nộp học phí');
@@ -239,7 +239,7 @@ export default function ClassStudentsPage() {
             <div>
                 <label style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', display: 'block' }}>Tổng học phí lớp</label>
                 <strong style={{ color: 'var(--warning-600)' }}>
-                    {formatCurrency(students.filter(s => s.tuitionPaid).length * (targetClass?.fee || 0))}
+                    {formatCurrency(students.length * (targetClass?.fee || 0))}
                 </strong>
             </div>
         </div>
@@ -294,7 +294,7 @@ export default function ClassStudentsPage() {
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{s.email}</div>
                   </td>
                   <td>
-                    {s.tuitionPaid ?
+                    {(s.tuitionPaid || s.paid) ?
                       <span className="badge badge-active">Đã nộp</span> :
                       <button className="btn btn-warning btn-sm" onClick={() => handlePayTuition(s)}>Nộp HP</button>
                     }

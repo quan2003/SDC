@@ -122,22 +122,17 @@ export const registrationsApi = {
     try {
       if (!supabase) return [];
       
-      // Get registrations and subjects separately to avoid missing foreign key relation errors
-      const [regsRes, subjectsRes] = await Promise.all([
-        supabase.from('registrations')
-          .select(`
-            *,
-            certificates (id, name, fee, description),
-            exam_sessions (id, name),
-            exam_rooms (id, shift, classrooms(name))
-          `)
-          .order('submitted_at', { ascending: false }),
-        supabase.from('subjects').select('id, name, tuition')
-      ]);
+      const { data, error } = await supabase.from('registrations')
+        .select(`
+          *,
+          certificates (id, name, fee, fee_ud, fee_outside, fee_freelance),
+          exam_sessions (id, name),
+          exam_rooms (id, shift, classrooms(name)),
+          subjects (id, name, tuition)
+        `)
+        .order('submitted_at', { ascending: false });
 
-      if (regsRes.error) throw regsRes.error;
-      const data = regsRes.data || [];
-      const subjectsList = subjectsRes.data || [];
+      if (error) throw error;
       
       // Tính toán số thứ tự cho từng hồ sơ theo loại
       const examRegs = (data || []).filter(r => r.type !== 'course').reverse();
@@ -149,20 +144,11 @@ export const registrationsApi = {
       const courseMap = {};
       courseRegs.forEach((r, idx) => { courseMap[r.id] = idx + 1; });
 
-      return data.map(r => {
-        const certData = Array.isArray(r.certificates) ? r.certificates[0] : r.certificates;
-        const cert = certData ? { ...certData } : null;
-        if (cert && cert.description) {
-            const parts = cert.description.split('|');
-            cert.fee_ud = parseInt(parts[1]) || 0;
-            cert.fee_outside = parseInt(parts[2]) || 0;
-            cert.fee_freelance = parseInt(parts[3]) || 0;
-        }
-        
+      return (data || []).map(r => {
+        const cert    = Array.isArray(r.certificates) ? r.certificates[0] : r.certificates;
         const session = Array.isArray(r.exam_sessions) ? r.exam_sessions[0] : r.exam_sessions;
         const room    = Array.isArray(r.exam_rooms)    ? r.exam_rooms[0]    : r.exam_rooms;
-        // Find subject manually from the separately fetched list
-        const subject = subjectsList.find(s => String(s.id) === String(r.subject_id)) || null;
+        const subject = Array.isArray(r.subjects)      ? r.subjects[0]      : r.subjects;
         
         const seqNumber = r.type === 'course' ? courseMap[r.id] : examMap[r.id];
         const isCourseRegistration = r.type === 'course' || r.type === 'course_registration';
