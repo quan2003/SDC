@@ -62,7 +62,8 @@ export default function CourseRegisterPage() {
 
     setLoading(true);
     try {
-      // Map form fields to database columns correctly
+      const subjectFee = Number(selectedSub?.tuition || selectedSub?.fee || 0);
+
       const payload = {
         full_name: form.fullName,
         dob: form.dob || null,
@@ -74,7 +75,9 @@ export default function CourseRegisterPage() {
         cccd_place: 'Việt Nam',
         cccd_date: new Date().toISOString().split('T')[0],
         certificate_id: selectedSub?.certificate_id ? parseInt(selectedSub.certificate_id) : null,
-        type: 'course',           // ← phân biệt đăng ký học vs đăng ký thi
+        subject_id: parseInt(form.subjectId) || null,   // ← lưu đúng cột DB
+        fee: subjectFee,                               // ← lưu đúng cột DB
+        type: 'course',
         paid: false,
         status: 'pending',
         other_request: JSON.stringify({
@@ -83,7 +86,7 @@ export default function CourseRegisterPage() {
           birthPlace: form.birthPlace,
           subjectId: form.subjectId,
           subjectName: selectedSub?.name,
-          fee: selectedSub?.tuition || 0,
+          fee: subjectFee,
           registeredAt: new Date().toISOString()
         })
       };

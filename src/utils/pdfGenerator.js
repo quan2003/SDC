@@ -136,7 +136,7 @@ export function generateExamCardHTML(data) {
           <div style="font-style: italic; font-size: 13pt;">Đà Nẵng, ngày ${today.day} tháng ${today.month} năm ${today.year}</div>
           <div style="font-weight: bold; margin-top: 8px; font-size: 13pt;">Người đăng ký dự thi</div>
           <div style="font-style: italic; font-size: 12pt;">(Ký, ghi rõ họ tên)</div>
-          <div style="margin-top: 60px; font-weight: bold; font-size: 13pt;">${data.fullName || ''}</div>
+          <div style="margin-top: 90px; font-weight: bold; font-size: 13pt;">${data.fullName || ''}</div>
         </div>
       </div>
     </div>
@@ -273,7 +273,7 @@ export function generateRegistrationFormHTML(data) {
           <div style="font-style: italic; font-size: 12pt;">Đà Nẵng, ngày ${today.day} tháng ${today.month} năm ${today.year}</div>
           <div style="font-weight: bold; margin-top: 3px; font-size: 12pt;">Người đăng ký dự thi</div>
           <div style="font-style: italic; font-size: 11pt;">(Ký, ghi rõ họ tên)</div>
-          <div style="margin-top: 35px; font-weight: bold; font-size: 12pt;">${data.fullName || ''}</div>
+          <div style="margin-top: 70px; font-weight: bold; font-size: 12pt;">${data.fullName || ''}</div>
         </div>
       </div>
 
@@ -329,23 +329,50 @@ export function printPDF(html) {
 }
 
 /**
- * Export to PDF file using html2pdf.js
+ * Export to PDF file — opens a new window with print dialog (Save as PDF)
+ * Does NOT require html2pdf.js or any external library.
  */
-export async function exportPDF(html, filename = 'document.pdf') {
-  const { default: html2pdf } = await import('html2pdf.js');
-  const container = document.createElement('div');
-  container.innerHTML = html;
-  document.body.appendChild(container);
-
-  await html2pdf().set({
-    margin: 5,
-    filename,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-  }).from(container).save();
-
-  document.body.removeChild(container);
+export function exportPDF(html, filename = 'document.pdf') {
+  const win = window.open('', '_blank', 'width=900,height=1200');
+  if (!win) {
+    alert('Vui lòng cho phép popup để tải PDF.');
+    return Promise.resolve();
+  }
+  win.document.write(`
+    <!DOCTYPE html>
+    <html lang="vi">
+    <head>
+      <meta charset="UTF-8">
+      <title>${filename.replace('.pdf', '')}</title>
+      <style>
+        @page { size: A4; margin: 10mm; }
+        body { margin: 0; padding: 0; font-family: 'Times New Roman', serif; }
+        @media print {
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+      </style>
+    </head>
+    <body>${html}</body>
+    </html>
+  `);
+  win.document.close();
+  // Đợi tài nguyên tải xong rồi mới mở print dialog
+  return new Promise((resolve) => {
+    win.onload = () => {
+      setTimeout(() => {
+        win.focus();
+        win.print();
+        // Không đóng để user có thể chọn "Lưu dưới dạng PDF"
+        resolve();
+      }, 400);
+    };
+    // Fallback nếu onload không kích hoạt
+    setTimeout(() => {
+      win.focus();
+      win.print();
+      resolve();
+    }, 800);
+  });
 }
 
 /**

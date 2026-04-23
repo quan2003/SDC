@@ -152,7 +152,23 @@ export const registrationsApi = {
         
         // regType determination
         const isCourseRegistration = r.type === 'course' || r.type === 'course_registration';
-        const displayName = isCourseRegistration ? (r.certificate_name || cert?.name) : (cert?.name || 'Chưa xác định');
+
+        // Với đăng ký học: cố gắng đọc tên môn học và học phí từ other_request (bản ghi cũ)
+        let courseSubjectName = null;
+        let courseFeeFromJson = 0;
+        if (isCourseRegistration && r.other_request) {
+          try {
+            const or = typeof r.other_request === 'string' ? JSON.parse(r.other_request) : r.other_request;
+            courseSubjectName = or?.subjectName || null;
+            courseFeeFromJson = Number(or?.fee) || 0;
+          } catch {}
+        }
+
+        const displayName = isCourseRegistration
+          ? (courseSubjectName || r.certificate_name || cert?.name || 'Chưa xác định')
+          : (cert?.name || 'Chưa xác định');
+
+        const displayFee = r.fee || (isCourseRegistration ? courseFeeFromJson : calculateFee(r.school, cert));
         
         return {
           ...r,
@@ -171,8 +187,8 @@ export const registrationsApi = {
           paidAt: r.paid_at,
           certificateId: r.certificate_id,
           certificateName: displayName,
-          fee: r.fee || calculateFee(r.school, cert),
-          receiptNo: seqNumber, // Số thứ tự tăng dần từ 1
+          fee: displayFee,
+          receiptNo: seqNumber,
           examSessionId: r.exam_session_id,
           examSessionName: session?.name || '',
           examRoomId: r.exam_room_id,
