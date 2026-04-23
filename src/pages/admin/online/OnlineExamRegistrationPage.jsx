@@ -172,6 +172,45 @@ export default function OnlineExamRegistrationPage() {
     else setSelectedIds(pagedIds);
   };
 
+  const handlePrintTable = () => {
+    if (filtered.length === 0) {
+      toast.error('Không có dữ liệu', 'Chưa có hồ sơ để in.');
+      return;
+    }
+    const html = `
+      <div style="font-family: 'Times New Roman', serif; padding: 40px; color: #000;">
+        <h2 style="text-align: center; margin-bottom: 20px;">DANH SÁCH ĐĂNG KÝ THI ONLINE</h2>
+        <table border="1" cellpadding="5" style="width: 100%; border-collapse: collapse; font-size: 11pt;">
+          <thead>
+            <tr style="background-color: #f2f2f2;">
+              <th style="width: 40px;">STT</th>
+              <th>Họ và tên</th>
+              <th style="width: 90px;">SĐT</th>
+              <th>Ngày sinh</th>
+              <th>Chứng chỉ thi</th>
+              <th>Lệ phí</th>
+              <th>Trạng thái</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filtered.map((s, i) => `
+              <tr>
+                <td align="center">${i + 1}</td>
+                <td><strong>${s.fullName}</strong></td>
+                <td align="center">${s.phone || ''}</td>
+                <td align="center">${formatDate(s.dob) || ''}</td>
+                <td>${s.certificateName || ''}</td>
+                <td align="center">${s.feePaid ? 'Đã thu' : 'Chưa thu'}</td>
+                <td align="center">${s.status === 'approved' ? 'Đã duyệt' : 'Chờ xử lý'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+    printPDF(html);
+  };
+
   const handleBulkDelete = async () => {
     if (!window.confirm(`Bạn có chắc muốn xóa ${selectedIds.length} hồ sơ đã chọn?`)) return;
     setLoading(true);
@@ -238,9 +277,12 @@ export default function OnlineExamRegistrationPage() {
         <h1 className="page-title"><FiEdit3 /> Quản lý đăng ký thi online</h1>
         <div className="page-actions">
           <button className="btn btn-ghost" onClick={() => {
-             exportToExcel(filtered, 'Danh_sach_online');
+             exportToExcel(filtered, 'Danh_sach_DKThi_Online');
              toast.success('Xuất file thành công', '');
           }}><FiDownload size={16} /> Xuất Excel</button>
+          <button className="btn btn-ghost" onClick={handlePrintTable}>
+            <FiPrinter size={16} /> In PDF
+          </button>
         </div>
       </div>
 
@@ -440,6 +482,10 @@ export default function OnlineExamRegistrationPage() {
                   <div className="form-group"><label className="form-label">Email</label><input type="email" className="form-input" value={editModal.email || ''} onChange={e => setEditModal({...editModal, email: e.target.value})} /></div>
                   <div className="form-group"><label className="form-label">Trường</label><input className="form-input" value={editModal.school || ''} onChange={e => setEditModal({...editModal, school: e.target.value})} /></div>
                   <div className="form-group"><label className="form-label">Lớp</label><input className="form-input" value={editModal.classGroup || ''} onChange={e => setEditModal({...editModal, classGroup: e.target.value})} /></div>
+                  <div className="form-group"><label className="form-label">Nơi sinh</label><input className="form-input" value={editModal.birthPlace || ''} onChange={e => setEditModal({...editModal, birthPlace: e.target.value})} /></div>
+                  <div className="form-group"><label className="form-label">Dân tộc</label><input className="form-input" value={editModal.ethnicity || ''} onChange={e => setEditModal({...editModal, ethnicity: e.target.value})} /></div>
+                  <div className="form-group"><label className="form-label">Ngày cấp CCCD</label><input type="date" className="form-input" value={editModal.cccdDate || ''} onChange={e => setEditModal({...editModal, cccdDate: e.target.value})} /></div>
+                  <div className="form-group"><label className="form-label">Nơi cấp CCCD</label><input className="form-input" value={editModal.cccdPlace || ''} onChange={e => setEditModal({...editModal, cccdPlace: e.target.value})} /></div>
                 </div>
               </div>
               <div className="modal-footer">

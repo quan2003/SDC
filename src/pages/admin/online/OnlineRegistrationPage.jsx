@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
-import { FiEdit2, FiSearch, FiCheck, FiEye, FiX, FiChevronLeft, FiChevronRight, FiTrash2, FiClock, FiCheckCircle, FiDollarSign, FiGlobe, FiLayers } from 'react-icons/fi';
+import { FiEdit2, FiSearch, FiCheck, FiEye, FiX, FiChevronLeft, FiChevronRight, FiTrash2, FiClock, FiCheckCircle, FiDollarSign, FiGlobe, FiLayers, FiDownload, FiPrinter } from 'react-icons/fi';
 import { useToast } from '../../../contexts/ToastContext';
 import { useAuth } from '../../../contexts/AuthContext';
 import { registrationsApi, certificatesApi } from '../../../services/api';
-import { formatDateTime, formatCurrency, filterBySearch, paginate, parseDate } from '../../../utils/helpers';
+import { formatDateTime, formatCurrency, filterBySearch, paginate, parseDate, formatDate, exportToExcel } from '../../../utils/helpers';
+import { printPDF } from '../../../utils/pdfGenerator';
 import PageLoader from '../../../components/PageLoader';
 import EmailModal from '../../../components/EmailModal';
 
@@ -147,6 +148,45 @@ export default function OnlineRegistrationPage() {
     else setSelectedIds(pagedIds);
   };
 
+  const handlePrintTable = () => {
+    if (filteredData.length === 0) {
+      toast.error('Không có dữ liệu', 'Chưa có hồ sơ để in.');
+      return;
+    }
+    const html = `
+      <div style="font-family: 'Times New Roman', serif; padding: 40px; color: #000;">
+        <h2 style="text-align: center; margin-bottom: 20px;">DANH SÁCH ĐĂNG KÝ HỌC ONLINE</h2>
+        <table border="1" cellpadding="5" style="width: 100%; border-collapse: collapse; font-size: 11pt;">
+          <thead>
+            <tr style="background-color: #f2f2f2;">
+              <th style="width: 40px;">STT</th>
+              <th>Họ và tên</th>
+              <th style="width: 90px;">SĐT</th>
+              <th>Ngày sinh</th>
+              <th>Môn ĐK học</th>
+              <th>Học phí</th>
+              <th>Trạng thái</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filteredData.map((s, i) => `
+              <tr>
+                <td align="center">${i + 1}</td>
+                <td><strong>${s.fullName}</strong></td>
+                <td align="center">${s.phone || ''}</td>
+                <td align="center">${formatDate(s.dob) || ''}</td>
+                <td>${s.certificateName || ''}</td>
+                <td align="center">${s.paid ? 'Đã thu' : 'Chưa nhận'}</td>
+                <td align="center">${s.status === 'approved' ? 'Đã duyệt' : 'Chờ xử lý'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+    printPDF(html);
+  };
+
   const handleBulkDelete = async () => {
     if (!window.confirm(`Bạn có chắc chắn muốn xóa ${selectedIds.length} hồ sơ đã chọn?`)) return;
     setLoading(true);
@@ -198,6 +238,15 @@ export default function OnlineRegistrationPage() {
     <div className="animate-fade-in-up">
       <div className="page-header">
         <h1 className="page-title"><FiGlobe /> Quản lý đăng ký học online</h1>
+        <div className="page-actions">
+          <button className="btn btn-ghost" onClick={() => {
+             exportToExcel(filteredData, 'Danh_sach_DKHoc_Online');
+             toast.success('Xuất file thành công', '');
+          }}><FiDownload size={16} /> Xuất Excel</button>
+          <button className="btn btn-ghost" onClick={handlePrintTable}>
+            <FiPrinter size={16} /> In PDF
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -354,6 +403,10 @@ export default function OnlineRegistrationPage() {
                   <div className="form-group"><label className="form-label">Email</label><input type="email" className="form-input" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} /></div>
                   <div className="form-group"><label className="form-label">Trường</label><input className="form-input" value={formData.school || ''} onChange={e => setFormData({...formData, school: e.target.value})} /></div>
                   <div className="form-group"><label className="form-label">Lớp</label><input className="form-input" value={formData.classGroup || ''} onChange={e => setFormData({...formData, classGroup: e.target.value})} /></div>
+                  <div className="form-group"><label className="form-label">Nơi sinh</label><input className="form-input" value={formData.birthPlace || ''} onChange={e => setFormData({...formData, birthPlace: e.target.value})} /></div>
+                  <div className="form-group"><label className="form-label">Dân tộc</label><input className="form-input" value={formData.ethnicity || ''} onChange={e => setFormData({...formData, ethnicity: e.target.value})} /></div>
+                  <div className="form-group"><label className="form-label">Ngày cấp CCCD</label><input type="date" className="form-input" value={formData.cccdDate || ''} onChange={e => setFormData({...formData, cccdDate: e.target.value})} /></div>
+                  <div className="form-group"><label className="form-label">Nơi cấp CCCD</label><input className="form-input" value={formData.cccdPlace || ''} onChange={e => setFormData({...formData, cccdPlace: e.target.value})} /></div>
                 </div>
               </div>
               <div className="modal-footer">

@@ -245,8 +245,10 @@ export default function RegisterPage() {
         @media (max-width: 768px) {
           .reg-header { flex-direction: column !important; gap: 20px !important; }
           .reg-grid { grid-template-columns: 1fr !important; }
+          .reg-grid > div { grid-column: span 1 !important; }
           .reg-card { padding: 20px !important; }
           .reg-photo-container { margin: 0 auto !important; }
+          .module-flex { flex-wrap: wrap !important; }
         }
       `}</style>
       <div className="client-container" style={{ maxWidth: 800 }}>
@@ -445,7 +447,7 @@ export default function RegisterPage() {
                     background: 'rgba(59,130,246,0.07)',
                   }}>
                     {/* Hàng 3 button */}
-                    <div style={{ display: 'flex', gap: 10 }}>
+                    <div className="module-flex" style={{ display: 'flex', gap: 10 }}>
                       {ADVANCED_MODULES.map(mod => {
                         const checked = (form.examModules || []).includes(mod);
                         return (
