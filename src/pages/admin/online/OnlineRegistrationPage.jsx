@@ -2,8 +2,8 @@ import { useState, useMemo, useEffect } from 'react';
 import { FiEdit2, FiSearch, FiCheck, FiEye, FiX, FiChevronLeft, FiChevronRight, FiTrash2, FiClock, FiCheckCircle, FiDollarSign, FiGlobe, FiLayers } from 'react-icons/fi';
 import { useToast } from '../../../contexts/ToastContext';
 import { useAuth } from '../../../contexts/AuthContext';
-import { registrationsApi, certificatesApi, certificateClassesApi } from '../../../services/api';
-import { paginate, formatDateTime, formatCurrency } from '../../../utils/helpers';
+import { registrationsApi, certificatesApi } from '../../../services/api';
+import { formatDateTime, formatCurrency, filterBySearch, paginate, parseDate } from '../../../utils/helpers';
 import PageLoader from '../../../components/PageLoader';
 import EmailModal from '../../../components/EmailModal';
 
@@ -285,7 +285,7 @@ export default function OnlineRegistrationPage() {
                 <td>
                   <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
 
-                    <button className="btn btn-ghost btn-icon-sm" onClick={() => { setEditModal(r); setFormData({...r}); }} title="Sửa"><FiEdit2 size={13} style={{ color: 'var(--primary-400)' }} /></button>
+                    <button className="btn btn-ghost btn-icon-sm" onClick={() => { setEditModal(r); setFormData({...r, dob: parseDate(r.dob) || '', cccdDate: parseDate(r.cccdDate) || ''}); }} title="Sửa"><FiEdit2 size={13} style={{ color: 'var(--primary-400)' }} /></button>
                     <button className="btn btn-ghost btn-icon-sm" onClick={() => setPreviewItem(r)} title="Xem chi tiết"><FiEye size={13} style={{ color: 'var(--info-500)' }} /></button>
                     {isAdmin && <button className="btn btn-ghost btn-icon-sm" onClick={() => setDeleteModal({ show: true, item: r })} title="Xóa"><FiTrash2 size={13} style={{ color: 'var(--danger-400)' }} /></button>}
                   </div>
@@ -348,7 +348,12 @@ export default function OnlineRegistrationPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                   <div className="form-group"><label className="form-label">Họ tên</label><input className="form-input" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} required /></div>
                   <div className="form-group"><label className="form-label">Số điện thoại</label><input className="form-input" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} required /></div>
+                  <div className="form-group"><label className="form-label">Ngày sinh</label><input type="date" className="form-input" value={formData.dob || ''} onChange={e => setFormData({...formData, dob: e.target.value})} /></div>
+                  <div className="form-group"><label className="form-label">Giới tính</label><select className="form-select" value={formData.gender || ''} onChange={e => setFormData({...formData, gender: e.target.value})}><option value="Nam">Nam</option><option value="Nữ">Nữ</option></select></div>
                   <div className="form-group"><label className="form-label">Số CCCD</label><input className="form-input" value={formData.cccd} onChange={e => setFormData({...formData, cccd: e.target.value})} required /></div>
+                  <div className="form-group"><label className="form-label">Email</label><input type="email" className="form-input" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} /></div>
+                  <div className="form-group"><label className="form-label">Trường</label><input className="form-input" value={formData.school || ''} onChange={e => setFormData({...formData, school: e.target.value})} /></div>
+                  <div className="form-group"><label className="form-label">Lớp</label><input className="form-input" value={formData.classGroup || ''} onChange={e => setFormData({...formData, classGroup: e.target.value})} /></div>
                 </div>
               </div>
               <div className="modal-footer">

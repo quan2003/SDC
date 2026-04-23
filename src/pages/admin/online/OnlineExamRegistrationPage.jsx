@@ -3,8 +3,8 @@ import { FiEdit3, FiSearch, FiCheck, FiEye, FiPrinter, FiDownload, FiX, FiTrash2
 import { useToast } from '../../../contexts/ToastContext';
 import { useAuth } from '../../../contexts/AuthContext';
 import { sendRealEmail } from '../../../utils/mailer';
-import { formatCurrency, formatDateTime, paginate, exportToExcel, formatDate } from '../../../utils/helpers';
-import { registrationsApi, certificatesApi } from '../../../services/api';
+import { formatCurrency, formatDateTime, paginate, exportToExcel, formatDate, parseDate } from '../../../utils/helpers';
+import { registrationsApi, certificatesApi, examSessionsApi } from '../../../services/api';
 import { generateReceiptHTML, generateExamCardHTML, generateRegistrationFormHTML, printPDF, exportPDF } from '../../../utils/pdfGenerator';
 import PageLoader from '../../../components/PageLoader';
 import EmailModal from '../../../components/EmailModal';
@@ -340,7 +340,7 @@ export default function OnlineExamRegistrationPage() {
                       <button className="btn btn-ghost btn-icon-sm" title="Xem chi tiết & In" onClick={() => setViewItem(r)}>
                         <FiEye size={13} style={{ color: 'var(--info-400)' }} />
                       </button>
-                      <button className="btn btn-ghost btn-icon-sm" title="Chỉnh sửa" onClick={() => setEditModal({...r})}>
+                      <button className="btn btn-ghost btn-icon-sm" title="Chỉnh sửa" onClick={() => setEditModal({...r, dob: parseDate(r.dob) || '', cccdDate: parseDate(r.cccdDate) || ''})}>
                         <FiEdit2 size={13} style={{ color: 'var(--primary-400)' }} />
                       </button>
                       {isAdmin && (
@@ -432,18 +432,14 @@ export default function OnlineExamRegistrationPage() {
             <form onSubmit={handleUpdate}>
               <div className="modal-body">
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                  <div className="form-group">
-                    <label className="form-label">Họ và tên</label>
-                    <input className="form-input" value={editModal.fullName} onChange={e => setEditModal({...editModal, fullName: e.target.value})} required />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Số CCCD</label>
-                    <input className="form-input" value={editModal.cccd} onChange={e => setEditModal({...editModal, cccd: e.target.value})} required />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Điện thoại</label>
-                    <input className="form-input" value={editModal.phone} onChange={e => setEditModal({...editModal, phone: e.target.value})} required />
-                  </div>
+                  <div className="form-group"><label className="form-label">Họ tên</label><input className="form-input" value={editModal.fullName || ''} onChange={e => setEditModal({...editModal, fullName: e.target.value})} required /></div>
+                  <div className="form-group"><label className="form-label">Số điện thoại</label><input className="form-input" value={editModal.phone || ''} onChange={e => setEditModal({...editModal, phone: e.target.value})} required /></div>
+                  <div className="form-group"><label className="form-label">Ngày sinh</label><input type="date" className="form-input" value={editModal.dob || ''} onChange={e => setEditModal({...editModal, dob: e.target.value})} /></div>
+                  <div className="form-group"><label className="form-label">Giới tính</label><select className="form-select" value={editModal.gender || ''} onChange={e => setEditModal({...editModal, gender: e.target.value})}><option value="Nam">Nam</option><option value="Nữ">Nữ</option></select></div>
+                  <div className="form-group"><label className="form-label">Số CCCD</label><input className="form-input" value={editModal.cccd || ''} onChange={e => setEditModal({...editModal, cccd: e.target.value})} required /></div>
+                  <div className="form-group"><label className="form-label">Email</label><input type="email" className="form-input" value={editModal.email || ''} onChange={e => setEditModal({...editModal, email: e.target.value})} /></div>
+                  <div className="form-group"><label className="form-label">Trường</label><input className="form-input" value={editModal.school || ''} onChange={e => setEditModal({...editModal, school: e.target.value})} /></div>
+                  <div className="form-group"><label className="form-label">Lớp</label><input className="form-input" value={editModal.classGroup || ''} onChange={e => setEditModal({...editModal, classGroup: e.target.value})} /></div>
                 </div>
               </div>
               <div className="modal-footer">

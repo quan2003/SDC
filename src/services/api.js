@@ -391,7 +391,14 @@ export const registrationsApi = {
     // Filter out undefined values to avoid overwriting with null unless intended
     const finalPayload = {};
     Object.keys(dbPayload).forEach(key => {
-      if (dbPayload[key] !== undefined) finalPayload[key] = dbPayload[key];
+      let val = dbPayload[key];
+      if (val !== undefined) {
+        // Prevent Postgres cast errors: empty strings in dates/foreign keys must be null, not ''
+        if (val === '' && (key.includes('dob') || key.includes('date') || key.includes('_id'))) {
+            val = null;
+        }
+        finalPayload[key] = val;
+      }
     });
 
     const { data, error } = await supabase.from('registrations').update(finalPayload).eq('id', targetId).select();
