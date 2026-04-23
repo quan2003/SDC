@@ -268,35 +268,42 @@ export const registrationsApi = {
   async create(payload) {
     if (!supabase) throw new Error('Supabase client not initialized');
     
+    // Helper: chuyển FK không hợp lệ (chuỗi rỗng, undefined, NaN) → null
+    const toId = (v) => {
+      const n = parseInt(v);
+      return isNaN(n) ? null : n;
+    };
+
     const dbPayload = {
-      full_name: payload.fullName || payload.full_name,
-      dob: payload.dob, 
-      gender: payload.gender || 'Khác',
-      ethnicity: payload.ethnicity || 'Kinh',
-      phone: payload.phone,
-      email: payload.email,
-      cccd: payload.cccd,
-      cccd_date: payload.cccdDate || payload.cccd_date || null,
-      cccd_place: payload.cccdPlace || payload.cccd_place || 'Việt Nam',
-      birth_place: payload.birthPlace,
-      school: payload.school,
-      class_group: payload.classGroup || payload.class_group,
-      certificate_id: payload.certificateId || payload.certificate_id,
-      exam_module: payload.examModule,
-      other_request: payload.otherRequest,
-      status: payload.status || 'pending',
-      type: payload.type || 'exam',
-      // Real database columns
-      code: payload.code,
-      exam_session_id: payload.examSessionId,
-      exam_room_id: payload.examRoomId,
-      fee_paid: payload.feePaid || false,
-      tuition_paid: payload.tuitionPaid || false,
-      paid: payload.paid || payload.feePaid || false,
-      fee: payload.fee || 0,
-      photo: payload.photo,
-      class_id: payload.classId,
-      subject_id: payload.subjectId,
+      full_name:    payload.fullName || payload.full_name || null,
+      dob:          payload.dob || null,
+      gender:       payload.gender || 'Khác',
+      ethnicity:    payload.ethnicity || 'Kinh',
+      phone:        payload.phone || null,
+      email:        payload.email || null,
+      cccd:         payload.cccd || null,
+      cccd_date:    payload.cccdDate || payload.cccd_date || null,
+      cccd_place:   payload.cccdPlace || payload.cccd_place || 'Việt Nam',
+      birth_place:  payload.birthPlace || null,
+      school:       payload.school || null,
+      class_group:  payload.classGroup || payload.class_group || null,
+      // bigint FKs — empty string → null
+      certificate_id:  toId(payload.certificateId ?? payload.certificate_id),
+      exam_session_id: toId(payload.examSessionId ?? payload.exam_session_id),
+      exam_room_id:    toId(payload.examRoomId ?? payload.exam_room_id),
+      class_id:        toId(payload.classId ?? payload.class_id),
+      subject_id:      toId(payload.subjectId ?? payload.subject_id),
+      // Các field khác
+      exam_module:   payload.examModule || null,
+      other_request: payload.otherRequest ?? payload.other_request ?? null,
+      status:        payload.status || 'pending',
+      type:          payload.type || 'exam',
+      code:          payload.code || null,
+      fee_paid:      payload.feePaid || false,
+      tuition_paid:  payload.tuitionPaid || false,
+      paid:          payload.paid || payload.feePaid || false,
+      fee:           payload.fee || 0,
+      photo:         payload.photo || null,
     };
 
     // Fallback: nếu fee chưa có, tính toán tự động

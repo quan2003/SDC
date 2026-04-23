@@ -74,6 +74,7 @@ export default function CourseRegisterPage() {
         cccd_place: 'Việt Nam',
         cccd_date: new Date().toISOString().split('T')[0],
         certificate_id: selectedSub?.certificate_id ? parseInt(selectedSub.certificate_id) : null,
+        type: 'course',           // ← phân biệt đăng ký học vs đăng ký thi
         paid: false,
         status: 'pending',
         other_request: JSON.stringify({
