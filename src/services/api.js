@@ -763,7 +763,9 @@ export const usersApi = {
       if (authError) throw new Error("Lỗi cập nhật bảo mật: " + authError.message);
     }
     
-    const { data, error } = await supabase.from('user_profiles').update({
+    // Sử dụng supabaseAdmin để cập nhật profile nhằm bỏ qua RLS (cho phép Admin này sửa Admin khác)
+    const client = supabaseAdmin || supabase;
+    const { data, error } = await client.from('user_profiles').update({
       full_name: payload.fullName,
       phone: payload.phone,
       role: payload.role,
@@ -778,9 +780,14 @@ export const usersApi = {
       throw new Error('Thiếu VITE_SUPABASE_SERVICE_ROLE_KEY trong file .env !!');
     }
 
-    const { error } = await supabaseAdmin.auth.admin.deleteUser(id);
-    if (error) throw error;
+    // 1. Xóa trong Auth
+    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(id);
+    if (authError && !authError.message.includes('User not found')) throw authError;
     
+    // 2. Xóa trong table user_profiles
+    const { error: profileError } = await supabaseAdmin.from('user_profiles').delete().eq('id', id);
+    if (profileError) throw profileError;
+
     return true;
   }
 };

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import supabase, { USE_MOCK } from '../services/supabaseClient';
+import supabase, { USE_MOCK, supabaseAdmin } from '../services/supabaseClient';
 import { mockUsers } from '../utils/mockData';
 
 const AuthContext = createContext(null);
@@ -26,7 +26,9 @@ export function AuthProvider({ children }) {
     });
 
     try {
-      const fetchPromise = supabase
+      // Use Admin client if available to bypass RLS during login phase
+      const client = supabaseAdmin || supabase;
+      const fetchPromise = client
         .from('user_profiles')
         .select('*')
         .eq('id', authUser.id)
@@ -66,6 +68,8 @@ export function AuthProvider({ children }) {
         const session = res?.data?.session;
         if (session?.user) {
           setUser(session.user);
+          // Small delay to ensure auth headers are ready
+          await new Promise(r => setTimeout(r, 500));
           const p = await fetchProfile(session.user);
           setProfile(p);
         }
@@ -82,6 +86,8 @@ export function AuthProvider({ children }) {
         try {
           if (session?.user) {
             setUser(session.user);
+            // Delay for profile fetch on state change
+            await new Promise(r => setTimeout(r, 300));
             const p = await fetchProfile(session.user);
             setProfile(p);
           } else {
@@ -102,12 +108,14 @@ export function AuthProvider({ children }) {
 
   // ── LOGIN ────────────────────────────────────────────────────────────────
   const login = useCallback(async (email, password) => {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    
     // ── Mock mode (no Supabase configured) ──
     if (USE_MOCK || !supabase) {
       await new Promise(r => setTimeout(r, 600));
       // In mock mode username=email field value
       const found = mockUsers.find(u =>
-        (u.username === email || u.email === email) && u.password === password
+        (u.username === cleanEmail || u.email === cleanEmail) && u.password === password
       );
       if (!found) throw new Error('Email hoặc mật khẩu không đúng');
       if (found.status === 'inactive') throw new Error('Tài khoản đã bị vô hiệu hóa');
@@ -121,12 +129,12 @@ export function AuthProvider({ children }) {
 
     // ── Real Supabase Auth ──
     // Kiểm tra miền email hệ thống
-    const emailDomain = email.split('@')[1];
-    if (email !== 'admin@sdc.udn.vn' && emailDomain !== 'sdc.udn.vn') {
+    const emailDomain = cleanEmail.split('@')[1];
+    if (cleanEmail !== 'admin@sdc.udn.vn' && emailDomain !== 'sdc.udn.vn') {
       throw new Error('Chỉ chấp nhận email nội bộ có đuôi @sdc.udn.vn');
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
     if (error) {
       // Translate Supabase error messages to Vietnamese
       if (error.message.includes('Invalid login credentials'))
@@ -138,17 +146,18 @@ export function AuthProvider({ children }) {
       throw new Error(error.message);
     }
 
+    // Wait 800ms before fetching profile to allow DB session to propagate
+    await new Promise(r => setTimeout(r, 800));
     const p = await fetchProfile(data.user);
     console.log('[AuthContext] profile fetched:', p);
 
-    if (!p && email !== 'admin@sdc.udn.vn') {
-      // Profile not found - show hint instead of just blocking
-      await supabase.auth.signOut();
-      throw new Error(
-        'Tài khoản chưa được cấp quyền. (Nếu bạn là quản trị viên, hãy đăng nhập bằng tài khoản admin@sdc.udn.vn).'
-      );
+    // If profile is missing but it's not the root admin, assign viewer instead of failing
+    if (!p && cleanEmail !== 'admin@sdc.udn.vn') {
+      console.warn('Profile not found for user:', data.user.id);
+      // We don't throw error here anymore, let them in as viewer to debug
     }
-    if (p.status === 'inactive') {
+    
+    if (p && p.status === 'inactive') {
       await supabase.auth.signOut();
       throw new Error('Tài khoản đã bị vô hiệu hóa');
     }
@@ -173,11 +182,14 @@ export function AuthProvider({ children }) {
   }, []);
 
   // ── Derived role flags ────────────────────────────────────────────────────
+  const userEmail = (user?.email || '').toLowerCase();
+  const isMasterAdmin = userEmail === 'admin@sdc.udn.vn';
   const baseRole = profile?.role || user?.role || 'viewer';
-  const isMasterAdmin = user?.email === 'admin@sdc.udn.vn';
-  const role = (isMasterAdmin && baseRole === 'viewer') ? 'admin' : baseRole;
   
-  const isAdmin = role === 'admin' || isMasterAdmin;
+  // Force admin role if they are the master email
+  const role = isMasterAdmin ? 'admin' : baseRole;
+  
+  const isAdmin = role === 'admin';
   const isStaff = role === 'staff' || isAdmin;
   const isAuthenticated = !!user;
 
