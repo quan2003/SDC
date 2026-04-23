@@ -181,38 +181,38 @@ export default function CertificateClassesPage() {
     if (!assignModal || selectedStudents.length === 0) return;
     setIsProcessing(true);
     try {
-      const classId = assignModal.id;
+      const classId   = assignModal.id;
       const classCode = assignModal.code || 'Lớp';
-      const startSTT = (assignModal.current_students || assignModal.currentStudents || 0);
+      const startSTT  = assignModal.current_students || assignModal.currentStudents || 0;
 
-      // Update each student
       for (let i = 0; i < selectedStudents.length; i++) {
-        const studentId = selectedStudents[i];
-        const student = pendingStudents.find(s => s.id === studentId);
+        const studentId    = selectedStudents[i];
         const generatedCode = `${classCode}.${String(startSTT + i + 1).padStart(2, '0')}`;
-        
+
+        // Chỉ update đúng 3 field cần thiết — không spread toàn bộ student object
+        // (spread gây lỗi vì ngày đã bị format dd/mm/yyyy, không hợp lệ với Postgres)
         await registrationsApi.update(studentId, {
-          ...student,
-          code: generatedCode, // Cấp mã mới theo lớp
+          code:    generatedCode,
           classId: classId,
-          activityClassId: classId,
-          status: 'approved'
+          status:  'approved',
         });
       }
 
-      // Update class count
-      const newCount = (assignModal.current_students || assignModal.currentStudents || 0) + selectedStudents.length;
+      // Cập nhật sỉ số lớp
+      const newCount = startSTT + selectedStudents.length;
       await certificateClassesApi.update(assignModal.id, { current_students: newCount });
 
-      toast.success('Thành công', `Đã thêm ${selectedStudents.length} học viên vào lớp ${assignModal.name}`);
+      toast.success('Thành công', `Đã xếp ${selectedStudents.length} học viên vào lớp ${assignModal.name}`);
       setAssignModal(null);
-      setRefreshKey(prev => prev + 1); // Trigger refresh
+      setRefreshKey(prev => prev + 1);
     } catch (e) {
-      toast.error('Lỗi', 'Có lỗi xảy ra khi xếp lớp');
+      console.error('Xếp lớp error:', e);
+      toast.error('Lỗi', e?.message || 'Có lỗi xảy ra khi xếp lớp');
     } finally {
       setIsProcessing(false);
     }
   };
+
 
   const filteredPending = useMemo(() => {
     if (!searchTerm) return pendingStudents;
