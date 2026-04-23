@@ -22,6 +22,38 @@ function Section({ title, children }) {
   );
 }
 
+/**
+ * Input tiền tệ VNĐ — format real-time ngay khi gõ: 250.000 + đ bên phải.
+ * Luôn hiển thị dấu chấm ngàn, không cần blur mới format.
+ */
+function CurrencyInput({ value, onChange }) {
+  // Strip non-digits, format with vi-VN dots
+  const format = (n) => (n > 0 ? new Intl.NumberFormat('vi-VN').format(n) : '');
+
+  const handleChange = (e) => {
+    const digits = e.target.value.replace(/\D/g, '');
+    onChange(Number(digits) || 0);
+  };
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        className="form-input"
+        inputMode="numeric"
+        value={format(value)}
+        onChange={handleChange}
+        placeholder="0"
+        style={{ paddingRight: 32, fontVariantNumeric: 'tabular-nums' }}
+      />
+      <span style={{
+        position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+        color: 'var(--text-tertiary)', fontSize: '0.9rem',
+        pointerEvents: 'none', userSelect: 'none',
+      }}>đ</span>
+    </div>
+  );
+}
+
 const TABS = [
   { id: 'general', label: 'Thông tin chung', icon: FiGlobe },
   { id: 'payment', label: 'Thanh toán', icon: FiDollarSign },
@@ -63,6 +95,7 @@ export default function SettingsPage() {
       feeInvoicePrefix: 'LPT',
       autoReminder: true,
       reminderDaysBefore: 3,
+      advancedModuleFee: 250000,
     };
   });
 
@@ -176,29 +209,53 @@ export default function SettingsPage() {
           )}
 
           {activeTab === 'payment' && (
-            <Section title="Cài đặt thanh toán">
-              <Field label="Lệ phí mặc định (học phí, VNĐ)">
-                <input className="form-input" type="number" value={payment.defaultTuitionFee} onChange={e => setPayment(p => ({ ...p, defaultTuitionFee: Number(e.target.value) }))} />
-              </Field>
-              <Field label="Lệ phí thi mặc định (VNĐ)">
-                <input className="form-input" type="number" value={payment.defaultExamFee} onChange={e => setPayment(p => ({ ...p, defaultExamFee: Number(e.target.value) }))} />
-              </Field>
-              <Field label="Tiền tố số phiếu thu HP">
-                <input className="form-input" value={payment.invoicePrefix} onChange={e => setPayment(p => ({ ...p, invoicePrefix: e.target.value }))} />
-              </Field>
-              <Field label="Tiền tố số phiếu lệ phí">
-                <input className="form-input" value={payment.feeInvoicePrefix} onChange={e => setPayment(p => ({ ...p, feeInvoicePrefix: e.target.value }))} />
-              </Field>
-              <Field label="Mã ngân hàng QR (VietQR)">
-                <input className="form-input" value={payment.qrBankCode} onChange={e => setPayment(p => ({ ...p, qrBankCode: e.target.value }))} />
-              </Field>
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={payment.enableQR} onChange={e => setPayment(p => ({ ...p, enableQR: e.target.checked }))} />
-                  <span className="form-label" style={{ margin: 0 }}>Hiển thị mã QR thanh toán</span>
-                </label>
-              </div>
-            </Section>
+            <>
+              <Section title="Cài đặt thanh toán">
+                <Field label="Lệ phí mặc định (học phí)">
+                  <CurrencyInput value={payment.defaultTuitionFee} onChange={v => setPayment(p => ({ ...p, defaultTuitionFee: v }))} />
+                </Field>
+                <Field label="Lệ phí thi mặc định">
+                  <CurrencyInput value={payment.defaultExamFee} onChange={v => setPayment(p => ({ ...p, defaultExamFee: v }))} />
+                </Field>
+                <Field label="Tiền tố số phiếu thu HP">
+                  <input className="form-input" value={payment.invoicePrefix} onChange={e => setPayment(p => ({ ...p, invoicePrefix: e.target.value }))} />
+                </Field>
+                <Field label="Tiền tố số phiếu lệ phí">
+                  <input className="form-input" value={payment.feeInvoicePrefix} onChange={e => setPayment(p => ({ ...p, feeInvoicePrefix: e.target.value }))} />
+                </Field>
+                <Field label="Mã ngân hàng QR (VietQR)">
+                  <input className="form-input" value={payment.qrBankCode} onChange={e => setPayment(p => ({ ...p, qrBankCode: e.target.value }))} />
+                </Field>
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={payment.enableQR} onChange={e => setPayment(p => ({ ...p, enableQR: e.target.checked }))} />
+                    <span className="form-label" style={{ margin: 0 }}>Hiển thị mã QR thanh toán</span>
+                  </label>
+                </div>
+              </Section>
+              <Section title="Lệ phí thi CNTT Nâng cao (mô đun)">
+                <Field label="Giá mỗi mô đun (Word / Excel / PowerPoint)">
+                  <CurrencyInput
+                    value={payment.advancedModuleFee}
+                    onChange={v => setPayment(p => ({ ...p, advancedModuleFee: v }))}
+                  />
+                </Field>
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <div style={{
+                    padding: '12px 16px',
+                    background: 'rgba(59,130,246,0.07)',
+                    border: '1px solid rgba(59,130,246,0.2)',
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: '0.85rem',
+                    color: 'var(--text-secondary)',
+                    lineHeight: 1.6
+                  }}>
+                    <strong style={{ color: 'var(--primary-400)' }}>Hướng dẫn:</strong> Sinh viên chọn <em>CNTT Nâng cao</em> sẽ tick chọn mô đun muốn thi (Word, Excel, PowerPoint). Mỗi mô đun tính theo giá trên.
+                    <br />Ví dụ: 3 mô đun × {new Intl.NumberFormat('vi-VN').format(payment.advancedModuleFee)}đ = <strong>{new Intl.NumberFormat('vi-VN').format(payment.advancedModuleFee * 3)}đ</strong>
+                  </div>
+                </div>
+              </Section>
+            </>
           )}
 
           {activeTab === 'email' && (

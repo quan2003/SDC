@@ -30,10 +30,31 @@ export default function RegisterPage() {
     fullName: '', dob: '', birthPlace: '', gender: 'Nam', ethnicity: 'Kinh',
     phone: '', email: '', cccd: '', cccdDate: '', cccdPlace: '',
     school: '', classGroup: '', certificateId: '', examSessionId: '', examRoomId: '',
-    examModule: '', otherRequest: '', photo: '',
+    examModules: [], otherRequest: '', photo: '',
   });
   const [errors, setErrors] = useState({});
   const [isOtherSchool, setIsOtherSchool] = useState(false);
+
+  // Đọc giá mô đun từ cài đặt admin (localStorage)
+  const getModuleFee = () => {
+    try {
+      const saved = localStorage.getItem('sdc_settings_payment');
+      if (saved) {
+        const p = JSON.parse(saved);
+        return Number(p.advancedModuleFee) || 250000;
+      }
+    } catch {}
+    return 250000;
+  };
+
+  const ADVANCED_MODULES = ['Word', 'Excel', 'PowerPoint'];
+
+  // Kiểm tra chứng chỉ hiện tại có phải CNTT Nâng cao không
+  const isAdvancedCert = () => {
+    if (!form.certificateId) return false;
+    const cert = certificates.find(c => c.id === Number(form.certificateId));
+    return cert && (cert.name || '').toLowerCase().includes('nâng cao');
+  };
 
   useEffect(() => {
     async function loadData() {
@@ -94,19 +115,25 @@ export default function RegisterPage() {
   const getCalculatedFee = () => {
     const cert = certificates.find(c => c.id === Number(form.certificateId));
     if (!cert) return 0;
-    
+
+    // Nếu là chứng chỉ nâng cao -> tính theo số mô đun
+    if ((cert.name || '').toLowerCase().includes('nâng cao')) {
+      const moduleFee = getModuleFee();
+      return (form.examModules || []).length * moduleFee;
+    }
+
     const s = (form.school || '').trim().toLowerCase();
-    
+
     // 1. Thí sinh tự do -> 500k
     if (s === 'thí sinh tự do') return cert.fee_free || 500000;
-    
+
     // 2. Sinh viên ĐH Đà Nẵng -> 300k
-    const isUDN = UDN_SCHOOLS.some(uds => uds.toLowerCase() === s) || 
-                  s.includes('đại học đà nẵng') || 
+    const isUDN = UDN_SCHOOLS.some(uds => uds.toLowerCase() === s) ||
+                  s.includes('đại học đà nẵng') ||
                   s.includes('đhđn');
-                  
+
     if (isUDN) return 300000;
-    
+
     // 3. Ngoài ĐHĐN (Mặc định cho các trường khác) -> 400k
     return cert.fee_outside || 400000;
   };
@@ -119,11 +146,18 @@ export default function RegisterPage() {
       const cert = certificates.find(c => c.id === Number(form.certificateId));
       const session = examSessions.find(s => String(s.id) === String(form.examSessionId));
       const calculatedFee = getCalculatedFee();
+      // Lưu examModule là chuỗi list mô đun
+      const examModuleStr = isAdvancedCert()
+        ? (form.examModules || []).join(', ')
+        : '';
+      // eslint-disable-next-line no-unused-vars
+      const { examModules: _modules, ...formWithoutModules } = form;
       const newReg = await registrationsApi.create({
-        ...form,
+        ...formWithoutModules,
         type: 'exam',
         fee: calculatedFee,
-        otherRequest: form.otherRequest, // Plain text request from user
+        examModule: examModuleStr,
+        otherRequest: form.otherRequest,
       });
 
       setSubmittedData({
@@ -196,7 +230,7 @@ export default function RegisterPage() {
               </div>
             )}
 
-            <button className="btn btn-primary" onClick={() => { setSubmitted(false); setSubmittedData(null); setForm({ fullName: '', dob: '', birthPlace: '', gender: 'Nam', ethnicity: 'Kinh', phone: '', email: '', cccd: '', cccdDate: '', cccdPlace: '', school: '', classGroup: '', certificateId: '', examModule: '', otherRequest: '', photo: '' }); }}>
+            <button className="btn btn-primary" onClick={() => { setSubmitted(false); setSubmittedData(null); setForm({ fullName: '', dob: '', birthPlace: '', gender: 'Nam', ethnicity: 'Kinh', phone: '', email: '', cccd: '', cccdDate: '', cccdPlace: '', school: '', classGroup: '', certificateId: '', examModules: [], otherRequest: '', photo: '' }); }}>
               Đăng ký hồ sơ khác
             </button>
           </div>
@@ -396,8 +430,75 @@ export default function RegisterPage() {
                 {errors.examRoomId && <div className="form-error">{errors.examRoomId}</div>}
               </div>
               <div className="form-group">
-                <label className="form-label">Mô đun dự thi <i style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>(nếu thi nâng cao)</i></label>
-                <input className="form-input" placeholder="Tên mô đun..." value={form.examModule} onChange={e => update('examModule', e.target.value)} />
+                <label className="form-label">Mô đun dự thi
+                  {isAdvancedCert()
+                    ? <i style={{ fontSize: '0.75rem', color: 'var(--primary-400)', marginLeft: 6 }}>(nâng cao — chọn mô đun)</i>
+                    : <i style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginLeft: 6 }}>(nếu thi nâng cao)</i>
+                  }
+                </label>
+                {isAdvancedCert() ? (
+                  <div style={{
+                    display: 'flex', flexDirection: 'column', gap: 8,
+                    padding: '12px 14px',
+                    border: '1px solid rgba(59,130,246,0.25)',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'rgba(59,130,246,0.07)',
+                  }}>
+                    {/* Hàng 3 button */}
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      {ADVANCED_MODULES.map(mod => {
+                        const checked = (form.examModules || []).includes(mod);
+                        return (
+                          <label
+                            key={mod}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 8,
+                              cursor: 'pointer', padding: '7px 16px',
+                              borderRadius: 'var(--radius-sm)',
+                              background: checked ? 'rgba(59,130,246,0.40)' : 'rgba(59,130,246,0.15)',
+                              border: `1.5px solid ${checked ? 'var(--primary-400)' : 'rgba(59,130,246,0.35)'}`,
+                              transition: 'all 0.15s',
+                              fontWeight: checked ? 700 : 400,
+                              color: checked ? 'var(--primary-400)' : 'var(--text-secondary)',
+                              fontSize: '0.9rem',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => {
+                                setForm(prev => {
+                                  const mods = prev.examModules || [];
+                                  return {
+                                    ...prev,
+                                    examModules: checked
+                                      ? mods.filter(m => m !== mod)
+                                      : [...mods, mod]
+                                  };
+                                });
+                              }}
+                              style={{ accentColor: 'var(--primary-400)' }}
+                            />
+                            {mod}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {/* Dòng tổng tiền — nằm ngoài hàng button */}
+                    {(form.examModules || []).length > 0 && (
+                      <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                        → {form.examModules.length} mô đun × {new Intl.NumberFormat('vi-VN').format(getModuleFee())}đ
+                        {' = '}
+                        <strong style={{ color: 'var(--danger-500)' }}>
+                          {new Intl.NumberFormat('vi-VN').format(form.examModules.length * getModuleFee())}đ
+                        </strong>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <input className="form-input" placeholder="Tên mô đun..." value={form.examModule || ''} onChange={e => update('examModule', e.target.value)} />
+                )}
               </div>
               <div className="form-group">
                 <label className="form-label">Yêu cầu khác <i style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>(nếu có)</i></label>
