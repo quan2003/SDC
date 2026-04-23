@@ -145,7 +145,55 @@ export default function HomePage() {
                 </div>
                 <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', flex: 1, marginBottom: 16 }}>{cert.description}</p>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontWeight: 700, color: 'var(--warning-400)' }}>{new Intl.NumberFormat('vi-VN').format(cert.fee)}đ</span>
+                  {(() => {
+                    const isAdvanced = (cert.name || '').toLowerCase().includes('nâng cao');
+
+                    // Đọc cài đặt admin từ localStorage
+                    let adminSettings = {};
+                    try { adminSettings = JSON.parse(localStorage.getItem('sdc_settings_payment') || '{}'); } catch {}
+                    const defaultFee = Number(adminSettings.defaultExamFee) || 0;
+                    const moduleFee  = Number(adminSettings.advancedModuleFee) || 250000;
+                    const fmt = (n) => new Intl.NumberFormat('vi-VN').format(n);
+
+                    if (isAdvanced) {
+                      return (
+                        <div>
+                          <div style={{ fontWeight: 700, color: 'var(--primary-400)', fontSize: '1rem' }}>
+                            {fmt(moduleFee)}đ
+                            <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 4 }}>/mô đun</span>
+                          </div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>Word · Excel · PowerPoint</div>
+                        </div>
+                      );
+                    }
+
+                    // Lấy các mức phí theo đối tượng
+                    const fees = [cert.fee_ud, cert.fee_outside, cert.fee_freelance].filter(f => f > 0);
+
+                    if (fees.length === 0) {
+                      // Chưa cấu hình → dùng defaultExamFee từ admin settings
+                      if (defaultFee > 0) {
+                        return (
+                          <div>
+                            <div style={{ fontWeight: 700, color: 'var(--warning-400)', fontSize: '1rem' }}>{fmt(defaultFee)}đ</div>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>Lệ phí thi</div>
+                          </div>
+                        );
+                      }
+                      return <span style={{ fontSize: '0.82rem', color: 'var(--text-tertiary)', fontStyle: 'italic' }}>Liên hệ để biết giá</span>;
+                    }
+
+                    const minFee = Math.min(...fees);
+                    const maxFee = Math.max(...fees);
+                    return (
+                      <div>
+                        <div style={{ fontWeight: 700, color: 'var(--warning-400)', fontSize: '1rem' }}>
+                          {minFee === maxFee ? `${fmt(minFee)}đ` : `${fmt(minFee)}đ – ${fmt(maxFee)}đ`}
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>Tùy đối tượng dự thi</div>
+                      </div>
+                    );
+                  })()}
                   <Link to="/dang-ky-thi" className="btn btn-primary btn-sm">Đăng ký</Link>
                 </div>
               </div>

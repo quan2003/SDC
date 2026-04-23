@@ -10,19 +10,44 @@ export default function CertificatesPage() {
   const columns = [
     { key: 'code', label: 'Mã', render: item => <code style={{ color: 'var(--primary-400)', fontWeight: 600 }}>{item.code}</code> },
     { key: 'name', label: 'Tên chứng chỉ', render: item => <strong>{item.name}</strong> },
-    { 
-      key: 'fees', 
-      label: 'Lệ phí thi theo đối tượng', 
-      render: item => (
-        <div style={{ fontSize: '0.8rem', lineHeight: 1.4 }}>
+    {
+      key: 'fees',
+      label: 'Lệ phí thi',
+      render: item => {
+        const isAdvanced = (item.name || '').toLowerCase().includes('nâng cao');
+        if (isAdvanced) {
+          // Đọc giá mô đun từ admin settings
+          let modFee = 250000;
+          try {
+            const s = localStorage.getItem('sdc_settings_payment');
+            if (s) modFee = Number(JSON.parse(s).advancedModuleFee) || 250000;
+          } catch {}
+          return (
+            <div style={{ fontSize: '0.8rem', lineHeight: 1.6 }}>
+              <div style={{ color: 'var(--primary-400)', fontWeight: 600, marginBottom: 2 }}>
+                Tính theo mô đun
+              </div>
+              <div>• Word: <span style={{ color: 'var(--primary-600)', fontWeight: 600 }}>{formatCurrency(modFee)}</span></div>
+              <div>• Excel: <span style={{ color: 'var(--primary-600)', fontWeight: 600 }}>{formatCurrency(modFee)}</span></div>
+              <div>• PowerPoint: <span style={{ color: 'var(--primary-600)', fontWeight: 600 }}>{formatCurrency(modFee)}</span></div>
+              <div style={{ marginTop: 4, fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+                *(Cấu hình tại Thiết lập → Thanh toán)
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div style={{ fontSize: '0.8rem', lineHeight: 1.4 }}>
             <div>• Thành viên ĐHĐN: <span style={{ color: 'var(--success-600)', fontWeight: 600 }}>{formatCurrency(item.fee_ud)}</span></div>
             <div>• Ngoài ĐHĐN (SV): <span style={{ color: 'var(--primary-600)', fontWeight: 600 }}>{formatCurrency(item.fee_outside)}</span></div>
             <div>• Thí sinh tự do: <span style={{ color: 'var(--warning-600)', fontWeight: 600 }}>{formatCurrency(item.fee_freelance)}</span></div>
-        </div>
-      )
+          </div>
+        );
+      }
     },
     { key: 'status', label: 'Trạng thái', render: item => <span className={`badge ${item.status === 'active' ? 'badge-active' : 'badge-inactive'}`}>{item.status === 'active' ? 'Hoạt động' : 'Ngừng'}</span> },
   ];
+
 
   const formFields = [
     { key: 'code', label: 'Mã chứng chỉ', required: true, placeholder: 'VD: CNTTCB' },
