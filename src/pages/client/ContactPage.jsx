@@ -1,16 +1,8 @@
 import { FiMapPin, FiPhone, FiMail, FiClock, FiSend } from 'react-icons/fi';
-import { useState } from 'react';
 import { useToast } from '../../contexts/ToastContext';
 
 export default function ContactPage() {
   const toast = useToast();
-  const [form, setForm] = useState({ name: '', email: '', phone: '', message: '' });
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    toast.success('Gửi thành công', 'Cảm ơn bạn đã liên hệ!');
-    setForm({ name: '', email: '', phone: '', message: '' });
-  };
 
   return (
     <div className="client-section" style={{ paddingTop: 40 }}>
@@ -47,28 +39,40 @@ export default function ContactPage() {
           {/* Form */}
           <div>
             <div className="card" style={{ padding: 28 }}>
-              <h3 style={{ marginBottom: 24 }}>Gửi tin nhắn</h3>
-              <form onSubmit={handleSubmit}>
+              <h3 style={{ marginBottom: 24 }}>Gửi tin nhắn ngay</h3>
+              <form 
+                action="https://formsubmit.co/contact@sdc.udn.vn" 
+                method="POST"
+                onSubmit={() => toast.success('Đang chuyển hướng...', 'Yêu cầu của bạn đang được xử lý!')}
+              >
+                {/* Configuration */}
+                <input type="hidden" name="_subject" value="Website SDC: Tin nhắn liên hệ mới" />
+                <input type="hidden" name="_template" value="table" />
+                <input type="hidden" name="_captcha" value="false" />
+                <input type="hidden" name="_next" value={window.location.href} />
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   <div className="form-group">
-                    <label className="form-label">Họ tên</label>
-                    <input className="form-input" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Họ và tên..." required />
+                    <label className="form-label">Họ tên khách hàng</label>
+                    <input className="form-input" name="Họ tên" placeholder="Họ và tên của bạn..." required />
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                     <div className="form-group">
-                      <label className="form-label">Email</label>
-                      <input className="form-input" type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="Email..." />
+                      <label className="form-label">Địa chỉ Email</label>
+                      <input className="form-input" type="email" name="Email" placeholder="Email để liên hệ lại..." required />
                     </div>
                     <div className="form-group">
-                      <label className="form-label">Điện thoại</label>
-                      <input className="form-input" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} placeholder="SĐT..." />
+                      <label className="form-label">Số điện thoại</label>
+                      <input className="form-input" name="Số điện thoại" placeholder="SĐT liên hệ..." required />
                     </div>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Nội dung</label>
-                    <textarea className="form-textarea" value={form.message} onChange={e => setForm(p => ({ ...p, message: e.target.value }))} placeholder="Nhập nội dung..." rows={5} required />
+                    <label className="form-label">Nội dung cần hỗ trợ</label>
+                    <textarea className="form-textarea" name="Nội dung" placeholder="Bạn cần chúng tôi hỗ trợ gì?" rows={5} required />
                   </div>
-                  <button type="submit" className="btn btn-primary"><FiSend size={16} /> Gửi tin nhắn</button>
+                  <button type="submit" className="btn btn-primary" style={{ height: 48 }}>
+                    <FiSend size={18} /> Gửi tin nhắn cho trung tâm
+                  </button>
                 </div>
               </form>
             </div>
