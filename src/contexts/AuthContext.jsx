@@ -85,6 +85,7 @@ export function AuthProvider({ children }) {
       async (event, session) => {
         try {
           if (session?.user) {
+            setLoading(true);
             setUser(session.user);
             // Delay for profile fetch on state change
             await new Promise(r => setTimeout(r, 300));
@@ -97,7 +98,6 @@ export function AuthProvider({ children }) {
         } catch (err) {
           console.error('Auth state change error:', err);
         } finally {
-          // Only stop loading spinner after first event
           setLoading(false);
         }
       }
@@ -112,18 +112,26 @@ export function AuthProvider({ children }) {
     
     // ── Mock mode (no Supabase configured) ──
     if (USE_MOCK || !supabase) {
+      setLoading(true);
       await new Promise(r => setTimeout(r, 600));
       // In mock mode username=email field value
       const found = mockUsers.find(u =>
         (u.username === cleanEmail || u.email === cleanEmail) && u.password === password
       );
-      if (!found) throw new Error('Email hoặc mật khẩu không đúng');
-      if (found.status === 'inactive') throw new Error('Tài khoản đã bị vô hiệu hóa');
+      if (!found) {
+        setLoading(false);
+        throw new Error('Email hoặc mật khẩu không đúng');
+      }
+      if (found.status === 'inactive') {
+        setLoading(false);
+        throw new Error('Tài khoản đã bị vô hiệu hóa');
+      }
       const userData = { ...found, role: found.role };
       delete userData.password;
       localStorage.setItem('sdc_mock_user', JSON.stringify(userData));
       setUser(userData);
       setProfile(userData);
+      setLoading(false);
       return userData;
     }
 
@@ -134,8 +142,10 @@ export function AuthProvider({ children }) {
       throw new Error('Chỉ chấp nhận email nội bộ có đuôi @sdc.udn.vn');
     }
 
+    setLoading(true);
     const { data, error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
     if (error) {
+      setLoading(false);
       // Translate Supabase error messages to Vietnamese
       if (error.message.includes('Invalid login credentials'))
         throw new Error('Email hoặc mật khẩu không đúng');
@@ -159,6 +169,7 @@ export function AuthProvider({ children }) {
     
     if (p && p.status === 'inactive') {
       await supabase.auth.signOut();
+      setLoading(false);
       throw new Error('Tài khoản đã bị vô hiệu hóa');
     }
 
