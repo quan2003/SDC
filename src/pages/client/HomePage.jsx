@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { FiAward, FiUsers, FiCalendar, FiArrowRight, FiCheckCircle, FiGlobe, FiBookOpen, FiPhone } from 'react-icons/fi';
 import { certificatesApi, notificationsApi } from '../../services/api';
+import NotificationAttachmentLink from '../../components/NotificationAttachmentLink';
+import { parseNotificationContent } from '../../utils/notificationAttachments';
 
 
 export default function HomePage() {
@@ -150,7 +152,11 @@ export default function HomePage() {
 
                     // Đọc cài đặt admin từ localStorage
                     let adminSettings = {};
-                    try { adminSettings = JSON.parse(localStorage.getItem('sdc_settings_payment') || '{}'); } catch {}
+                    try {
+                      adminSettings = JSON.parse(localStorage.getItem('sdc_settings_payment') || '{}');
+                    } catch {
+                      // Ignore malformed local settings.
+                    }
                     const defaultFee = Number(adminSettings.defaultExamFee) || 0;
                     const moduleFee  = Number(adminSettings.advancedModuleFee) || 250000;
                     const fmt = (n) => new Intl.NumberFormat('vi-VN').format(n);
@@ -215,18 +221,22 @@ export default function HomePage() {
             ) : notifications.length === 0 && (
               <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-tertiary)' }}>Hiện chưa có thông báo mới.</div>
             )}
-            {notifications.map(n => (
-              <div key={n.id} className="card" style={{ padding: '20px 24px', display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-                <div style={{ width: 40, height: 40, borderRadius: 'var(--radius-md)', background: 'rgba(59, 130, 246, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <FiCalendar size={16} style={{ color: 'var(--primary-400)' }} />
+            {notifications.map(n => {
+              const parsed = parseNotificationContent(n.content);
+              return (
+                <div key={n.id} className="card" style={{ padding: '20px 24px', display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 'var(--radius-md)', background: 'rgba(59, 130, 246, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <FiCalendar size={16} style={{ color: 'var(--primary-400)' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 600, marginBottom: 4 }}>{n.title}</div>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>{parsed.text}</p>
+                    <NotificationAttachmentLink attachment={parsed.attachment} compact />
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginTop: 8 }}>{n.date}</div>
+                  </div>
                 </div>
-                <div>
-                  <div style={{ fontWeight: 600, marginBottom: 4 }}>{n.title}</div>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>{n.content}</p>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginTop: 8 }}>{n.date}</div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>

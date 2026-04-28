@@ -1,185 +1,252 @@
-import { useState, useRef } from 'react';
-import { FiBarChart2, FiUpload, FiDownload, FiEdit2, FiCheck, FiX, FiCheckCircle } from 'react-icons/fi';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { FiBarChart2, FiCalendar, FiCheckCircle, FiFileText, FiUpload } from 'react-icons/fi';
 import { useToast } from '../../../contexts/ToastContext';
-import { mockStudents, mockCertificates } from '../../../utils/mockData';
-import { exportToExcel } from '../../../utils/helpers';
+import { notificationsApi } from '../../../services/api';
+import supabase from '../../../services/supabaseClient';
+import { fileToBase64, formatDate, slugify } from '../../../utils/helpers';
+import {
+  buildNotificationContent,
+  formatFileSize,
+  parseNotificationContent,
+} from '../../../utils/notificationAttachments';
+import NotificationAttachmentLink from '../../../components/NotificationAttachmentLink';
 
-const mockScores = mockStudents.map((s, i) => ({
-  id: s.id, code: s.code, fullName: s.fullName,
-  certId: mockCertificates[i % 2]?.id || 1,
-  certName: mockCertificates[i % 2]?.name || '',
-  score_ly_thuyet: i % 3 === 0 ? null : (7.5 + i * 0.3).toFixed(1),
-  score_thuc_hanh: i % 3 === 0 ? null : (8.0 + i * 0.2).toFixed(1),
-  result: i % 3 === 0 ? null : (7.5 + i * 0.3 >= 5 && 8.0 + i * 0.2 >= 5) ? 'pass' : 'fail',
-}));
+const SCORE_BUCKET = 'score-files';
+const MAX_FILE_SIZE = 8 * 1024 * 1024;
+const ALLOWED_EXTENSIONS = ['pdf', 'xlsx', 'xls'];
+
+const today = () => new Date().toISOString().split('T')[0];
+
+const getExtension = (fileName = '') => fileName.split('.').pop()?.toLowerCase() || '';
+
+const isValidScoreFile = (file) => ALLOWED_EXTENSIONS.includes(getExtension(file.name));
+
+async function uploadFileToStorage(file) {
+  if (!supabase) return null;
+
+  const safeName = slugify(file.name.replace(/\.[^.]+$/, '')) || 'bang-diem';
+  const extension = getExtension(file.name);
+  const path = `exam-scores/${Date.now()}-${safeName}.${extension}`;
+
+  const { error } = await supabase.storage
+    .from(SCORE_BUCKET)
+    .upload(path, file, {
+      cacheControl: '3600',
+      contentType: file.type || undefined,
+      upsert: false,
+    });
+
+  if (error) throw error;
+
+  const { data } = supabase.storage.from(SCORE_BUCKET).getPublicUrl(path);
+  return data?.publicUrl ? { url: data.publicUrl, path, bucket: SCORE_BUCKET } : null;
+}
+
+async function buildAttachment(file) {
+  const base = {
+    name: file.name,
+    size: file.size,
+    type: file.type || getExtension(file.name),
+    createdAt: new Date().toISOString(),
+  };
+
+  const dataUrl = await fileToBase64(file);
+
+  try {
+    const uploaded = await uploadFileToStorage(file);
+    if (uploaded?.url) return { ...base, source: 'storage', dataUrl, ...uploaded };
+  } catch (error) {
+    console.warn('Falling back to embedded score file:', error.message);
+  }
+
+  return { ...base, source: 'embedded', dataUrl };
+}
 
 export default function ExamScoresPage() {
   const toast = useToast();
-  const [scores, setScores] = useState([]);
-  const [filterCert, setFilterCert] = useState('');
-  const [filterResult, setFilterResult] = useState('');
-  const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({});
+  const [title, setTitle] = useState('Thông báo điểm thi');
+  const [content, setContent] = useState('Trung tâm thông báo file điểm thi. Sinh viên vui lòng mở file đính kèm để xem kết quả.');
+  const [date, setDate] = useState(today());
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [notices, setNotices] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [publishing, setPublishing] = useState(false);
 
-  const filtered = scores.filter(s => {
-    if (filterCert && String(s.certId) !== filterCert) return false;
-    if (filterResult === 'entered' && s.score_ly_thuyet === null) return false;
-    if (filterResult === 'not_entered' && s.score_ly_thuyet !== null) return false;
-    if (filterResult === 'pass' && s.result !== 'pass') return false;
-    if (filterResult === 'fail' && s.result !== 'fail') return false;
-    return true;
-  });
+  const scoreNotices = useMemo(
+    () => notices.filter(n => n.type === 'score' || parseNotificationContent(n.content).attachment),
+    [notices]
+  );
 
-  const startEdit = (s) => { setEditingId(s.id); setEditForm({ score_ly_thuyet: s.score_ly_thuyet || '', score_thuc_hanh: s.score_thuc_hanh || '' }); };
-  const cancelEdit = () => setEditingId(null);
+  const loadNotices = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await notificationsApi.getAll();
+      setNotices(data || []);
+    } catch (error) {
+      toast.error('Lỗi tải thông báo', error.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
 
-  const saveEdit = (id) => {
-    const lt = parseFloat(editForm.score_ly_thuyet);
-    const th = parseFloat(editForm.score_thuc_hanh);
-    const result = (!isNaN(lt) && !isNaN(th)) ? (lt >= 5 && th >= 5 ? 'pass' : 'fail') : null;
-    setScores(prev => prev.map(s => s.id === id ? { ...s, score_ly_thuyet: isNaN(lt) ? null : lt.toFixed(1), score_thuc_hanh: isNaN(th) ? null : th.toFixed(1), result } : s));
-    setEditingId(null);
-    toast.success('Đã lưu điểm', '');
+  useEffect(() => {
+    loadNotices();
+  }, [loadNotices]);
+
+  const handleFileChange = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    if (!isValidScoreFile(file)) {
+      toast.error('File không hợp lệ', 'Chỉ hỗ trợ PDF, XLS hoặc XLSX.');
+      return;
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error('File quá lớn', `Vui lòng chọn file không quá ${formatFileSize(MAX_FILE_SIZE)}.`);
+      return;
+    }
+
+    setSelectedFile(file);
+    if (title === 'Thông báo điểm thi') {
+      setTitle(`Thông báo điểm thi - ${file.name.replace(/\.[^.]+$/, '')}`);
+    }
   };
 
-  const stats = {
-    total: scores.length,
-    entered: scores.filter(s => s.score_ly_thuyet !== null).length,
-    pass: scores.filter(s => s.result === 'pass').length,
-    fail: scores.filter(s => s.result === 'fail').length,
+  const handlePublish = async () => {
+    if (!selectedFile) {
+      toast.error('Chưa chọn file', 'Vui lòng chọn file PDF hoặc Excel chứa điểm thi.');
+      return;
+    }
+
+    setPublishing(true);
+    try {
+      const attachment = await buildAttachment(selectedFile);
+      await notificationsApi.create({
+        title: title.trim() || 'Thông báo điểm thi',
+        content: buildNotificationContent(content, attachment),
+        type: 'score',
+        date,
+        status: 'active',
+      });
+
+      toast.success('Đã công bố điểm', 'Sinh viên có thể xem file trong mục Thông báo.');
+      setSelectedFile(null);
+      setTitle('Thông báo điểm thi');
+      setContent('Trung tâm thông báo file điểm thi. Sinh viên vui lòng mở file đính kèm để xem kết quả.');
+      setDate(today());
+      await loadNotices();
+    } catch (error) {
+      toast.error('Không thể công bố điểm', error.message);
+    } finally {
+      setPublishing(false);
+    }
   };
 
   return (
     <div className="animate-fade-in-up">
       <div className="page-header">
-        <h1 className="page-title"><FiCheckCircle /> Quản lý điểm thi</h1>
-        <div className="page-actions">
-          <button className="btn btn-ghost" onClick={() => document.getElementById('upload-scores').click()}>
-            <FiUpload size={16} /> Upload điểm
-          </button>
-          <input 
-            type="file" 
-            id="upload-scores" 
-            style={{ display: 'none' }} 
-            accept=".xlsx,.csv" 
-            onChange={(e) => {
-               if(e.target.files.length > 0) {
-                 toast.success('Hệ thống đã nhận file', `Đang cập nhật điểm cho ${Math.floor(Math.random()*30)+15} học viên...`);
-                 e.target.value = null; // reset
-               }
-            }} 
-          />
-          <button className="btn btn-ghost" onClick={() => {
-            exportToExcel(filtered, 'Danh_sach_diem');
-            toast.success('Xuất file thành công', '');
-          }}><FiDownload size={16} /> Xuất Excel</button>
-        </div>
+        <h1 className="page-title"><FiBarChart2 /> Công bố điểm thi</h1>
       </div>
 
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
-        {[
-          { label: 'Tổng thí sinh', value: stats.total, color: 'var(--primary-400)' },
-          { label: 'Đã nhập điểm', value: stats.entered, color: 'var(--accent-400)' },
-          { label: 'Đạt', value: stats.pass, color: 'var(--success-400)' },
-          { label: 'Không đạt', value: stats.fail, color: 'var(--danger-400)' },
-        ].map((s, i) => (
-          <div key={i} className="card" style={{ padding: '16px 20px' }}>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)', marginBottom: 6 }}>{s.label}</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: s.color }}>{s.value}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(300px, 0.85fr)', gap: 20 }}>
+        <div className="card" style={{ padding: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+            <div style={{ width: 42, height: 42, borderRadius: 'var(--radius-md)', background: 'rgba(59, 130, 246, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <FiUpload size={20} style={{ color: 'var(--primary-400)' }} />
+            </div>
+            <div>
+              <h2 style={{ fontSize: '1.1rem', margin: 0 }}>Upload file điểm</h2>
+              <p style={{ margin: '4px 0 0', color: 'var(--text-tertiary)', fontSize: '0.85rem' }}>
+                Hỗ trợ PDF, XLS, XLSX. Sau khi công bố, file sẽ hiện trong thông báo sinh viên.
+              </p>
+            </div>
           </div>
-        ))}
-      </div>
 
-      {/* Filters */}
-      <div className="toolbar">
-        <div className="toolbar-left" style={{ gap: 10 }}>
-          <select className="form-select" value={filterCert} onChange={e => setFilterCert(e.target.value)} style={{ width: 220 }}>
-            <option value="">Tất cả chứng chỉ</option>
-            {mockCertificates.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
-          </select>
-          <select className="form-select" value={filterResult} onChange={e => setFilterResult(e.target.value)} style={{ width: 160 }}>
-            <option value="">Tất cả</option>
-            <option value="entered">Đã nhập điểm</option>
-            <option value="not_entered">Chưa nhập điểm</option>
-            <option value="pass">Đạt</option>
-            <option value="fail">Không đạt</option>
-          </select>
-        </div>
-        <div className="toolbar-right">
-          <span style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)' }}>
-            Hiển thị <strong style={{ color: 'var(--text-primary)' }}>{filtered.length}</strong> thí sinh
-          </span>
-        </div>
-      </div>
+          <div style={{ display: 'grid', gap: 16 }}>
+            <div className="form-group">
+              <label className="form-label">Tiêu đề thông báo</label>
+              <input
+                className="form-input"
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                placeholder="Ví dụ: Thông báo điểm thi CNTT đợt tháng 4/2026"
+              />
+            </div>
 
-      <div className="card">
-        <div style={{ overflowX: 'auto' }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th style={{ width: 44 }}>STT</th>
-                <th>Mã HV</th>
-                <th>Họ và tên</th>
-                <th>Chứng chỉ</th>
-                <th style={{ textAlign: 'center' }}>Điểm LT</th>
-                <th style={{ textAlign: 'center' }}>Điểm TH</th>
-                <th style={{ textAlign: 'center' }}>Kết quả</th>
-                <th style={{ textAlign: 'center', width: 100 }}>Thao tác</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 40, color: 'var(--text-tertiary)' }}>Không có dữ liệu</td></tr>
-              ) : filtered.map((s, i) => (
-                <tr key={s.id}>
-                  <td style={{ color: 'var(--text-tertiary)' }}>{i + 1}</td>
-                  <td><code style={{ color: 'var(--primary-400)' }}>{s.code}</code></td>
-                  <td><strong>{s.fullName}</strong></td>
-                  <td style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>{s.certName}</td>
-                  <td style={{ textAlign: 'center' }}>
-                    {editingId === s.id ? (
-                      <input className="form-input" type="number" min={0} max={10} step={0.1} value={editForm.score_ly_thuyet}
-                        onChange={e => setEditForm(f => ({ ...f, score_ly_thuyet: e.target.value }))}
-                        style={{ width: 70, textAlign: 'center', padding: '4px 8px' }} />
-                    ) : (
-                      <span style={{ fontWeight: 600, color: s.score_ly_thuyet === null ? 'var(--text-tertiary)' : s.score_ly_thuyet >= 5 ? 'var(--success-500)' : 'var(--danger-400)' }}>
-                        {s.score_ly_thuyet ?? '—'}
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ textAlign: 'center' }}>
-                    {editingId === s.id ? (
-                      <input className="form-input" type="number" min={0} max={10} step={0.1} value={editForm.score_thuc_hanh}
-                        onChange={e => setEditForm(f => ({ ...f, score_thuc_hanh: e.target.value }))}
-                        style={{ width: 70, textAlign: 'center', padding: '4px 8px' }} />
-                    ) : (
-                      <span style={{ fontWeight: 600, color: s.score_thuc_hanh === null ? 'var(--text-tertiary)' : s.score_thuc_hanh >= 5 ? 'var(--success-500)' : 'var(--danger-400)' }}>
-                        {s.score_thuc_hanh ?? '—'}
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ textAlign: 'center' }}>
-                    {s.result === 'pass' ? <span className="badge badge-success">✓ Đạt</span>
-                      : s.result === 'fail' ? <span className="badge badge-inactive">✗ Không đạt</span>
-                      : <span className="badge badge-warning">Chưa có</span>}
-                  </td>
-                  <td style={{ textAlign: 'center' }}>
-                    {editingId === s.id ? (
-                      <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
-                        <button className="btn btn-ghost btn-icon-sm" title="Lưu" onClick={() => saveEdit(s.id)}><FiCheck size={14} style={{ color: 'var(--success-500)' }} /></button>
-                        <button className="btn btn-ghost btn-icon-sm" title="Hủy" onClick={cancelEdit}><FiX size={14} style={{ color: 'var(--danger-400)' }} /></button>
-                      </div>
-                    ) : (
-                      <button className="btn btn-ghost btn-icon-sm" title="Nhập điểm" onClick={() => startEdit(s)}>
-                        <FiEdit2 size={14} style={{ color: 'var(--primary-400)' }} />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+            <div className="form-group">
+              <label className="form-label">Ngày thông báo</label>
+              <div style={{ position: 'relative' }}>
+                <FiCalendar size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+                <input
+                  className="form-input"
+                  type="date"
+                  value={date}
+                  onChange={e => setDate(e.target.value)}
+                  style={{ paddingLeft: 38 }}
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Nội dung hiển thị</label>
+              <textarea
+                className="form-textarea"
+                value={content}
+                onChange={e => setContent(e.target.value)}
+                placeholder="Nhập nội dung thông báo ngắn gọn cho sinh viên"
+                style={{ minHeight: 110 }}
+              />
+            </div>
+
+            <label className="file-upload" style={{ margin: 0, cursor: 'pointer' }}>
+              <input type="file" accept=".pdf,.xlsx,.xls" onChange={handleFileChange} style={{ display: 'none' }} />
+              <FiFileText className="file-upload-icon" />
+              <div className="file-upload-text">
+                {selectedFile ? selectedFile.name : 'Chọn file điểm PDF hoặc Excel'}
+              </div>
+              <div className="file-upload-hint">
+                {selectedFile ? `${formatFileSize(selectedFile.size)} · bấm để chọn file khác` : `Dung lượng tối đa ${formatFileSize(MAX_FILE_SIZE)}`}
+              </div>
+            </label>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+              <button className="btn btn-primary" onClick={handlePublish} disabled={publishing}>
+                {publishing ? <span className="loading-spinner" /> : <FiCheckCircle size={16} />}
+                {publishing ? 'Đang công bố...' : 'Công bố cho sinh viên'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="card" style={{ padding: 24 }}>
+          <h2 style={{ fontSize: '1.05rem', marginBottom: 14 }}>Thông báo điểm đã công bố</h2>
+          {loading ? (
+            <div style={{ color: 'var(--text-tertiary)', padding: '16px 0' }}>
+              <span className="loading-spinner" style={{ marginRight: 8 }} />
+              Đang tải...
+            </div>
+          ) : scoreNotices.length === 0 ? (
+            <div style={{ color: 'var(--text-tertiary)', padding: '16px 0' }}>
+              Chưa có thông báo điểm nào.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {scoreNotices.slice(0, 6).map(notice => {
+                const parsed = parseNotificationContent(notice.content);
+                return (
+                  <div key={notice.id} style={{ paddingBottom: 14, borderBottom: '1px solid var(--border-color)' }}>
+                    <div style={{ fontWeight: 700, lineHeight: 1.4 }}>{notice.title}</div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginTop: 4 }}>
+                      {formatDate(notice.date)} · {notice.status === 'active' ? 'Đang hiển thị' : 'Đã ẩn'}
+                    </div>
+                    <NotificationAttachmentLink attachment={parsed.attachment} compact />
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>

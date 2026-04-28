@@ -1,12 +1,29 @@
 import supabase, { supabaseAdmin, serviceRoleKey } from './supabaseClient';
-import { formatDate, parseDate } from '../utils/helpers';
+import { formatDate } from '../utils/helpers';
 
 const MOCK_MAP = {};
 
 const getMockData = (tableName) => MOCK_MAP[tableName] || [];
 
-// Polyfill behavior when MOCK is active
-const getLocalRegistrations = () => JSON.parse(localStorage.getItem('sdc_online_registrations') || '[]');
+const LOCAL_TABLE_KEYS = {
+  notifications: 'sdc_local_notifications',
+};
+
+const getLocalTable = (tableName) => {
+  const key = LOCAL_TABLE_KEYS[tableName];
+  if (!key) return getMockData(tableName);
+  try {
+    return JSON.parse(localStorage.getItem(key) || '[]');
+  } catch {
+    return [];
+  }
+};
+
+const saveLocalTable = (tableName, rows) => {
+  const key = LOCAL_TABLE_KEYS[tableName];
+  if (!key) return;
+  localStorage.setItem(key, JSON.stringify(rows));
+};
 
 export const certificatesApi = {
   async getAll() {
@@ -161,7 +178,9 @@ export const registrationsApi = {
             const or = typeof r.other_request === 'string' ? JSON.parse(r.other_request) : r.other_request;
             fallbackName = or?.subjectName || null;
             fallbackFee  = Number(or?.fee) || 0;
-          } catch {}
+          } catch {
+            // Ignore malformed legacy metadata.
+          }
         }
 
         const displayName = isCourseRegistration
@@ -431,7 +450,7 @@ export const registrationsApi = {
 export const createCrudApi = (tableName) => ({
   async getAll() {
     try {
-      if (!supabase) return [];
+      if (!supabase) return getLocalTable(tableName);
       
       const { data, error } = await supabase.from(tableName).select('*').order('id', { ascending: false });
       if (error) {
@@ -494,7 +513,12 @@ export const createCrudApi = (tableName) => ({
     }
   },
   async create(payload) {
-    if (!supabase) return { ...payload, id: Date.now() };
+    if (!supabase) {
+      const rows = getLocalTable(tableName);
+      const created = { ...payload, id: Date.now() };
+      saveLocalTable(tableName, [created, ...rows]);
+      return created;
+    }
     
     let dbPayload = { ...payload };
     
@@ -590,7 +614,12 @@ export const createCrudApi = (tableName) => ({
     return result;
   },
   async update(id, payload) {
-    if (!supabase) return { ...payload, id };
+    if (!supabase) {
+      const rows = getLocalTable(tableName);
+      const updated = { ...payload, id };
+      saveLocalTable(tableName, rows.map(item => String(item.id) === String(id) ? { ...item, ...updated } : item));
+      return updated;
+    }
     
     let dbPayload = { ...payload };
 
@@ -679,7 +708,11 @@ export const createCrudApi = (tableName) => ({
     return result;
   },
   async delete(id) {
-    if (!supabase) return true;
+    if (!supabase) {
+      const rows = getLocalTable(tableName);
+      saveLocalTable(tableName, rows.filter(item => String(item.id) !== String(id)));
+      return true;
+    }
     const { error } = await supabase.from(tableName).delete().eq('id', id);
     if (error) throw error;
     return true;
@@ -723,7 +756,7 @@ export const usersApi = {
         role: u.role,
         status: u.status
       }));
-    } catch (e) {
+    } catch {
       return [];
     }
   },
@@ -797,12 +830,12 @@ export const usersApi = {
     
     // Sử dụng supabaseAdmin để cập nhật profile nhằm bỏ qua RLS (cho phép Admin này sửa Admin khác)
     const client = supabaseAdmin || supabase;
-    const { data, error } = await client.from('user_profiles').update({
+    const { error } = await client.from('user_profiles').update({
       full_name: payload.fullName,
       phone: payload.phone,
       role: payload.role,
       status: payload.status
-    }).eq('id', id).select();
+    }).eq('id', id);
     if (error) throw error;
     return { ...payload, id };
   },

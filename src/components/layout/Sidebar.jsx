@@ -43,7 +43,7 @@ const menuItems = [
       { path: '/admin/exam-registration', icon: FiFileText, label: 'DS đăng ký thi' },
       { path: '/admin/exam-paid', icon: FiDollarSign, label: 'DS đã đóng lệ phí' },
       { path: '/admin/exam-rooms', icon: FiMap, label: 'Phòng thi & Giờ thi' },
-      { path: '/admin/exam-scores', icon: FiBarChart2, label: 'Upload điểm' },
+      { path: '/admin/exam-scores', icon: FiBarChart2, label: 'Công bố điểm' },
     ]
   },
   {

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet } from 'react-router-dom';
 import { FiMenu, FiX, FiPhone, FiMail, FiMapPin, FiFacebook, FiGlobe } from 'react-icons/fi';
 
 const navItems = [
@@ -25,8 +25,8 @@ export default function ClientLayout() {
         fontSize: '0.78rem',
         color: 'var(--text-tertiary)',
       }}>
-        <div className="client-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+        <div className="client-container client-topbar-inner" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="client-topbar-contact" style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><FiPhone size={12} /> +0236 2240 741</span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><FiMail size={12} /> contact@sdc.udn.vn</span>
           </div>
@@ -42,10 +42,10 @@ export default function ClientLayout() {
         top: 0,
         zIndex: 100,
       }}>
-        <div className="client-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 64 }}>
-          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
+        <div className="client-container client-navbar-inner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 64 }}>
+          <Link to="/" className="client-brand" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
             <img src="/Logo-SDC.xanh.png" alt="SDC Logo" style={{ width: 42, height: 'auto', objectFit: 'contain' }} />
-            <div>
+            <div className="client-brand-text">
               <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)' }}>Trung tâm Phát triển Phần mềm</div>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>Đại học Đà Nẵng</div>
             </div>

@@ -235,7 +235,7 @@ export default function OnlineRegistrationPage() {
   if (loading) return <PageLoader loading />;
 
   return (
-    <div className="animate-fade-in-up">
+    <div className="animate-fade-in-up online-registration-page">
       <div className="page-header">
         <h1 className="page-title"><FiGlobe /> Quản lý đăng ký học online</h1>
         <div className="page-actions">
@@ -250,38 +250,38 @@ export default function OnlineRegistrationPage() {
       </div>
 
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+      <div className="online-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
         {[
           { label: 'Tổng đăng ký', value: stats.total, color: 'var(--primary-500)' },
           { label: 'Chờ xử lý', value: stats.pending, color: 'var(--warning-500)' },
           { label: 'Đã xác nhận', value: stats.confirmed, color: 'var(--success-500)' },
           { label: 'Doanh thu học phí', value: formatCurrency(stats.totalRevenue), color: 'var(--success-600)' },
         ].map((s, i) => (
-          <div key={i} className="card" style={{ padding: 20 }}>
+          <div key={i} className="card online-stat-card" style={{ padding: 20 }}>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>{s.label}</div>
             <div style={{ fontSize: '1.25rem', fontWeight: 800, color: s.color }}>{s.value}</div>
           </div>
         ))}
       </div>
 
-      <div className="toolbar card" style={{ padding: 12, marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: 12, flex: 1, alignItems: 'center' }}>
-          <div className="search-bar" style={{ flex: 1, maxWidth: 300 }}>
+      <div className="toolbar card online-toolbar" style={{ padding: 12, marginBottom: 16 }}>
+        <div className="online-toolbar-fields" style={{ display: 'flex', gap: 12, flex: 1, alignItems: 'center' }}>
+          <div className="search-bar online-search" style={{ flex: 1, maxWidth: 300 }}>
             <FiSearch className="search-icon" />
             <input className="form-input" placeholder="Họ tên, SĐT, CCCD..." value={search} onChange={e => { setSearch(e.target.value); setCurrentPage(1); }} style={{ paddingLeft: 36 }} />
           </div>
-          <select className="form-input" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ width: 160 }}>
+          <select className="form-input online-filter" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ width: 160 }}>
             <option value="all">Tất cả trạng thái</option>
             <option value="pending">Chờ xử lý</option>
             <option value="approved">Đã xác nhận</option>
           </select>
-          <select className="form-input" value={certFilter} onChange={e => setCertFilter(e.target.value)} style={{ width: 220 }}>
+          <select className="form-input online-filter online-filter-wide" value={certFilter} onChange={e => setCertFilter(e.target.value)} style={{ width: 220 }}>
             <option value="all">Tất cả môn học</option>
             {certificates.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
           </select>
           
           {selectedIds.length > 0 && (
-            <div style={{ display: 'flex', gap: 8, paddingLeft: 12, borderLeft: '1px solid var(--border-color)' }}>
+            <div className="online-bulk-actions" style={{ display: 'flex', gap: 8, paddingLeft: 12, borderLeft: '1px solid var(--border-color)' }}>
               <button className="btn btn-primary btn-sm" onClick={() => setEmailModalData(data.filter(r => selectedIds.includes(r.id)))}>
                  <FiCheckCircle size={14} /> Gửi Email ({selectedIds.length})
               </button>
@@ -297,8 +297,8 @@ export default function OnlineRegistrationPage() {
       </div>
 
       {/* Table */}
-      <div className="card" style={{ padding: 0 }}>
-        <table className="data-table">
+      <div className="card online-table-card" style={{ padding: 0 }}>
+        <table className="data-table online-registration-table">
           <thead>
             <tr>
               <th style={{ width: 40 }}><input type="checkbox" checked={selectedIds.length === paged.data.length && paged.data.length > 0} onChange={toggleAll} style={{ accentColor: 'var(--primary-500)' }} /></th>
@@ -332,7 +332,7 @@ export default function OnlineRegistrationPage() {
                   </button>
                 </td>
                 <td>
-                  <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                  <div className="online-row-actions" style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
 
                     <button className="btn btn-ghost btn-icon-sm" onClick={() => { setEditModal(r); setFormData({...r, dob: parseDate(r.dob) || '', cccdDate: parseDate(r.cccdDate) || ''}); }} title="Sửa"><FiEdit2 size={13} style={{ color: 'var(--primary-400)' }} /></button>
                     <button className="btn btn-ghost btn-icon-sm" onClick={() => setPreviewItem(r)} title="Xem chi tiết"><FiEye size={13} style={{ color: 'var(--info-500)' }} /></button>
@@ -356,7 +356,7 @@ export default function OnlineRegistrationPage() {
               <button className="modal-close" onClick={() => setPreviewItem(null)}><FiX /></button>
             </div>
             <div className="modal-body">
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+              <div className="online-modal-grid online-preview-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                 {[
                   { label: 'Họ và tên', value: previewItem.fullName },
                   { label: 'Ngày sinh', value: previewItem.dob },
@@ -370,7 +370,7 @@ export default function OnlineRegistrationPage() {
                   { label: 'Thanh toán', value: previewItem.paid ? 'Đã nộp tiền' : 'Chưa nộp tiền' },
                   { label: 'Yêu cầu khác', value: renderOtherRequest(previewItem.otherRequest) },
                 ].map((f, i) => (
-                  <div key={i} style={{ gridColumn: f.label === 'Yêu cầu khác' ? 'span 2' : 'auto' }}>
+                  <div key={i} className={`online-modal-field ${f.label === 'Yêu cầu khác' ? 'online-modal-field-wide' : ''}`} style={{ gridColumn: f.label === 'Yêu cầu khác' ? 'span 2' : 'auto' }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: 2 }}>{f.label}</div>
                     <div style={{ fontWeight: 600, color: f.label === 'Yêu cầu khác' ? 'var(--primary-600)' : 'inherit' }}>{f.value || '—'}</div>
                   </div>
@@ -394,7 +394,7 @@ export default function OnlineRegistrationPage() {
             </div>
             <form onSubmit={handleUpdate}>
               <div className="modal-body">
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div className="online-modal-grid online-edit-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                   <div className="form-group"><label className="form-label">Họ tên</label><input className="form-input" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} required /></div>
                   <div className="form-group"><label className="form-label">Số điện thoại</label><input className="form-input" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} required /></div>
                   <div className="form-group"><label className="form-label">Ngày sinh</label><input type="date" className="form-input" value={formData.dob || ''} onChange={e => setFormData({...formData, dob: e.target.value})} /></div>

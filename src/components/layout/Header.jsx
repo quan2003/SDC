@@ -21,7 +21,7 @@ export default function Header() {
 
   return (
     <>
-      <header style={{
+      <header className="admin-header" style={{
       height: 'var(--header-height)',
       background: 'var(--bg-header)',
       backdropFilter: 'blur(20px)',
@@ -35,13 +35,13 @@ export default function Header() {
       zIndex: 50,
     }}>
       {/* Search */}
-      <div className="search-bar" style={{ flex: 1, maxWidth: 400 }}>
+      <div className="search-bar admin-search" style={{ flex: 1, maxWidth: 400 }}>
         <FiSearch className="search-icon" />
         <input className="form-input" placeholder="Tìm kiếm..." style={{ paddingLeft: 42, background: 'var(--bg-glass)' }} />
       </div>
 
       {/* Right side */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div className="admin-header-actions" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         {/* Notifications */}
         <button className="btn btn-ghost btn-icon" style={{ position: 'relative' }}>
           <FiBell size={18} />
@@ -56,6 +56,7 @@ export default function Header() {
         <div className="dropdown" ref={dropdownRef}>
           <button
             onClick={() => setDropdownOpen(!dropdownOpen)}
+            className="admin-user-button"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -77,7 +78,7 @@ export default function Header() {
             }}>
               {displayName?.charAt(0)?.toUpperCase() || 'U'}
             </div>
-            <div style={{ textAlign: 'left' }}>
+            <div className="admin-user-info" style={{ textAlign: 'left' }}>
               <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{displayName || 'User'}</div>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>
                 {role === 'admin' ? 'Quản trị viên' : role === 'staff' ? 'Nhân viên' : 'Viewer'}

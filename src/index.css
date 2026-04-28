@@ -1289,9 +1289,290 @@ h4 { font-size: 1.1rem; }
   padding: 0 24px;
 }
 
+.client-brand {
+  min-width: 0;
+}
+
+.client-brand-text {
+  min-width: 0;
+}
+
+.lookup-result-grid {
+  align-items: stretch;
+}
+
+.lookup-info-row {
+  gap: 16px;
+  min-width: 0;
+}
+
+.lookup-info-label {
+  flex-shrink: 0;
+}
+
+.lookup-info-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.lookup-payment-panel {
+  justify-self: end;
+  min-width: 0;
+}
+
+.lookup-qr-image img {
+  display: block;
+}
+
+.admin-content,
+.admin-main,
+.online-registration-page {
+  min-width: 0;
+}
+
+.admin-header {
+  min-width: 0;
+}
+
+.admin-search {
+  min-width: 180px;
+}
+
+.admin-header-actions {
+  flex-shrink: 0;
+}
+
+.online-stats-grid {
+  min-width: 0;
+}
+
+.online-toolbar,
+.online-toolbar-fields {
+  min-width: 0;
+}
+
+.online-toolbar-fields {
+  width: 100%;
+}
+
+.online-search {
+  min-width: 220px;
+}
+
+.online-table-card {
+  overflow-x: auto;
+}
+
+.online-registration-table {
+  min-width: 920px;
+}
+
+.online-row-actions {
+  white-space: nowrap;
+}
+
+.online-modal-field {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.badge-success {
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--success-500);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.badge-danger {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--danger-500);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.badge-warning {
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--warning-500);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 768px) {
   html { font-size: 13px; }
+
+  .admin-content {
+    margin-left: var(--sidebar-collapsed) !important;
+  }
+
+  .admin-sidebar {
+    width: var(--sidebar-collapsed) !important;
+  }
+
+  .admin-main {
+    padding: 16px !important;
+  }
+
+  .admin-header {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+    gap: 10px;
+  }
+
+  .admin-search {
+    max-width: none !important;
+    min-width: 0;
+  }
+
+  .admin-header-actions {
+    gap: 8px !important;
+  }
+
+  .admin-user-info {
+    display: none;
+  }
+
+  .client-container {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .client-section {
+    padding-top: 48px;
+    padding-bottom: 48px;
+  }
+
+  .client-topbar-inner {
+    justify-content: center !important;
+  }
+
+  .client-topbar-contact {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px 14px !important;
+    text-align: center;
+  }
+
+  .client-navbar-inner {
+    height: 58px !important;
+  }
+
+  .client-brand {
+    gap: 8px !important;
+    max-width: calc(100% - 48px);
+  }
+
+  .client-brand img {
+    width: 36px !important;
+    flex-shrink: 0;
+  }
+
+  .client-brand-text > div:first-child {
+    max-width: min(58vw, 230px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.9rem !important;
+  }
+
+  .client-brand-text > div:last-child {
+    font-size: 0.65rem !important;
+    white-space: nowrap;
+  }
+
+  .lookup-page-section {
+    padding-top: 24px !important;
+  }
+
+  .lookup-heading {
+    margin-bottom: 24px !important;
+  }
+
+  .lookup-heading h1 {
+    font-size: 1.65rem !important;
+  }
+
+  .lookup-card {
+    padding: 20px !important;
+  }
+
+  .lookup-search-row {
+    flex-direction: column;
+  }
+
+  .lookup-search-row .btn {
+    width: 100%;
+  }
+
+  .lookup-result-grid {
+    grid-template-columns: 1fr !important;
+    gap: 18px !important;
+  }
+
+  .lookup-info-row {
+    align-items: flex-start;
+  }
+
+  .lookup-info-value {
+    text-align: right;
+  }
+
+  .lookup-payment-panel {
+    width: 100% !important;
+    justify-self: stretch;
+  }
+
+  .online-registration-page .page-title {
+    font-size: 1.25rem;
+  }
+
+  .online-registration-page .page-actions {
+    flex-wrap: wrap;
+  }
+
+  .online-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+  }
+
+  .online-stat-card {
+    padding: 16px !important;
+  }
+
+  .online-toolbar-fields {
+    flex-wrap: wrap;
+    align-items: stretch !important;
+  }
+
+  .online-search {
+    flex: 1 1 100% !important;
+    max-width: none !important;
+    min-width: 0;
+  }
+
+  .online-filter {
+    flex: 1 1 calc(50% - 6px);
+    width: auto !important;
+    min-width: 160px;
+  }
+
+  .online-filter-wide {
+    min-width: 220px;
+  }
+
+  .online-bulk-actions {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    border-left: 0 !important;
+    border-top: 1px solid var(--border-color);
+    padding-left: 0 !important;
+    padding-top: 12px;
+  }
+
+  .online-modal-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .online-modal-field {
+    grid-column: auto !important;
+  }
   
   .page-header {
     flex-direction: column;
@@ -1319,6 +1600,84 @@ h4 { font-size: 1.1rem; }
 @media (max-width: 480px) {
   .stats-grid {
     grid-template-columns: 1fr;
+  }
+
+  .client-container {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .client-brand-text > div:first-child {
+    max-width: 52vw;
+    font-size: 0.82rem !important;
+  }
+
+  .lookup-card {
+    padding: 16px !important;
+    border-radius: var(--radius-md);
+  }
+
+  .lookup-info-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .lookup-info-value {
+    width: 100%;
+    text-align: left !important;
+  }
+
+  .lookup-info-row > span:last-child {
+    width: 100%;
+  }
+
+  .lookup-payment-panel {
+    padding: 14px !important;
+  }
+
+  .lookup-print-btn {
+    width: 100%;
+  }
+
+  .admin-main {
+    padding: 12px !important;
+  }
+
+  .admin-header {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  .admin-search input {
+    padding-left: 36px !important;
+  }
+
+  .admin-user-button {
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+  }
+
+  .online-registration-page .page-actions {
+    width: 100%;
+  }
+
+  .online-registration-page .page-actions .btn {
+    flex: 1 1 calc(50% - 5px);
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .online-stats-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .online-filter {
+    flex-basis: 100%;
+    min-width: 0;
+  }
+
+  .online-bulk-actions .btn {
+    flex: 1 1 100%;
   }
 }
 /* ===== Toast Notifications ===== */
