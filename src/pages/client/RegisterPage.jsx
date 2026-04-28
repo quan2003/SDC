@@ -30,7 +30,7 @@ export default function RegisterPage() {
     fullName: '', dob: '', birthPlace: '', gender: 'Nam', ethnicity: 'Kinh',
     phone: '', email: '', cccd: '', cccdDate: '', cccdPlace: '',
     school: '', classGroup: '', certificateId: '', examSessionId: '', examRoomId: '',
-    examModules: [], otherRequest: '', photo: '',
+    examModules: [], otherRequest: '', examCommitment: false, photo: '',
   });
   const [errors, setErrors] = useState({});
   const [isOtherSchool, setIsOtherSchool] = useState(false);
@@ -108,6 +108,7 @@ export default function RegisterPage() {
     // Không bắt buộc examRoomId nữa, để trống sẽ setup ngẫu nhiên
     if (!isOtherSchool && !form.school) e.school = 'Vui lòng chọn đối tượng/trường';
     if (isOtherSchool && !form.school.trim()) e.school = 'Vui lòng nhập tên trường';
+    if (!form.examCommitment) e.examCommitment = 'Vui lòng xác nhận cam kết trước khi đăng ký';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -157,7 +158,10 @@ export default function RegisterPage() {
         type: 'exam',
         fee: calculatedFee,
         examModule: examModuleStr,
-        otherRequest: form.otherRequest,
+        otherRequest: JSON.stringify({
+          other_request: form.otherRequest,
+          examCommitment: form.examCommitment ? 'Đã cam kết thực hiện đúng quy định tổ chức thi và cấp chứng chỉ ứng dụng CNTT' : '',
+        }),
       });
 
       setSubmittedData({
@@ -230,7 +234,7 @@ export default function RegisterPage() {
               </div>
             )}
 
-            <button className="btn btn-primary" onClick={() => { setSubmitted(false); setSubmittedData(null); setForm({ fullName: '', dob: '', birthPlace: '', gender: 'Nam', ethnicity: 'Kinh', phone: '', email: '', cccd: '', cccdDate: '', cccdPlace: '', school: '', classGroup: '', certificateId: '', examModules: [], otherRequest: '', photo: '' }); }}>
+            <button className="btn btn-primary" onClick={() => { setSubmitted(false); setSubmittedData(null); setForm({ fullName: '', dob: '', birthPlace: '', gender: 'Nam', ethnicity: 'Kinh', phone: '', email: '', cccd: '', cccdDate: '', cccdPlace: '', school: '', classGroup: '', certificateId: '', examModules: [], otherRequest: '', examCommitment: false, photo: '' }); }}>
               Đăng ký hồ sơ khác
             </button>
           </div>
@@ -262,7 +266,7 @@ export default function RegisterPage() {
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="card reg-card" style={{ padding: 32 }}>
+          <div className="card reg-card client-form-card" style={{ padding: 32 }}>
             {/* Photo + Basic info */}
             <div style={{ display: 'flex', gap: 28, marginBottom: 24 }} className="reg-header">
               {/* Photo upload */}
@@ -506,6 +510,17 @@ export default function RegisterPage() {
                 <label className="form-label">Yêu cầu khác <i style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>(nếu có)</i></label>
                 <input className="form-input" placeholder="Yêu cầu khác..." value={form.otherRequest} onChange={e => update('otherRequest', e.target.value)} />
               </div>
+              <div className="form-group exam-commitment-panel" style={{ gridColumn: 'span 2' }}>
+                <label className={`exam-commitment-option ${form.examCommitment ? 'selected' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={form.examCommitment}
+                    onChange={e => update('examCommitment', e.target.checked)}
+                  />
+                  <span>Tôi cam kết thực hiện đúng các quy định về tổ chức thi và cấp chứng chỉ ứng dụng CNTT.</span>
+                </label>
+                {errors.examCommitment && <div className="form-error">{errors.examCommitment}</div>}
+              </div>
             </div>
 
             {/* Note */}
@@ -519,7 +534,7 @@ export default function RegisterPage() {
 
             {/* Submit */}
             <div style={{ marginTop: 28, textAlign: 'center' }}>
-              <button type="submit" className="btn btn-primary btn-lg" disabled={loading} style={{ minWidth: 200 }}>
+              <button type="submit" className="btn btn-primary btn-lg" disabled={loading || !form.examCommitment} style={{ minWidth: 200 }}>
                 {loading ? (
                   <><span className="loading-spinner" /> Đang gửi...</>
                 ) : (

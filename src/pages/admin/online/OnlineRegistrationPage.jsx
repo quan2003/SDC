@@ -222,11 +222,14 @@ export default function OnlineRegistrationPage() {
     try {
       const obj = typeof val === 'string' ? JSON.parse(val) : val;
       const userMsg = obj.other_request || obj.request || obj.message || obj.note;
+      const parts = [];
       
       if (userMsg && userMsg.trim()) {
-        return userMsg;
+        parts.push(userMsg);
       }
-      return '—';
+      if (obj.referralSource) parts.push(`Biết qua: ${obj.referralSource}`);
+      if (obj.advisorName) parts.push(`Người tư vấn: ${obj.advisorName}`);
+      return parts.length ? parts.join(' | ') : '—';
     } catch { 
       return String(val); 
     }

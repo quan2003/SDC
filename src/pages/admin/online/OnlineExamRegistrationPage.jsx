@@ -249,11 +249,13 @@ export default function OnlineExamRegistrationPage() {
         examRoomId: 'Phòng thi',
         examSessionId: 'Đợt thi',
         source: 'Nguồn',
+        referralSource: 'Biết qua',
+        advisorName: 'Người tư vấn',
         birthPlace: 'Nơi sinh',
         rawOption: 'Tùy chọn'
       };
 
-      const systemKeys = ['type', 'subjectId', 'subjectName', 'fee', 'registeredAt', 'tuitionPaid', 'feePaid', 'activityClassId', 'cccdDate', 'cccdPlace', 'photo'];
+      const systemKeys = ['type', 'subjectId', 'subjectName', 'fee', 'registeredAt', 'tuitionPaid', 'feePaid', 'activityClassId', 'cccdDate', 'cccdPlace', 'photo', 'advisorId'];
       const filtered = Object.entries(obj).filter(([k]) => !systemKeys.includes(k) && obj[k] !== undefined && obj[k] !== '');
       
       const parts = [];

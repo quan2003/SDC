@@ -56,7 +56,7 @@ export default function LookupPage() {
           <p style={{ color: 'var(--text-secondary)' }}>Tra cứu trạng thái hồ sơ đăng ký thi và nhận mã thanh toán</p>
         </div>
 
-        <div className="card lookup-card" style={{ padding: 32 }}>
+        <div className="card lookup-card client-form-card" style={{ padding: 32 }}>
           <form onSubmit={handleSearch}>
             <div className="form-group" style={{ marginBottom: result ? 24 : 0 }}>
               <label className="form-label"><FiUser size={14} /> Nhập số CCCD hoặc số điện thoại theo hồ sơ</label>

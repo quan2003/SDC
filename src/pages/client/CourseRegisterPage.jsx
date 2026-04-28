@@ -1,14 +1,21 @@
 import { useState, useEffect } from 'react';
 import { FiSend, FiCheckCircle, FiUser, FiPhone, FiMail, FiBook, FiCalendar, FiDollarSign, FiMapPin, FiCreditCard } from 'react-icons/fi';
 import { useToast } from '../../contexts/ToastContext';
-import { registrationsApi, subjectsApi } from '../../services/api';
+import { registrationsApi, subjectsApi, usersApi } from '../../services/api';
 import DateInput from '../../components/DateInput';
 import { formatCurrency } from '../../utils/helpers';
+
+const REFERRAL_OPTIONS = [
+  { value: 'friend', label: 'Bạn bè' },
+  { value: 'facebook', label: 'Facebook' },
+  { value: 'advisor', label: 'Người tư vấn' },
+];
 
 export default function CourseRegisterPage() {
   const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [subjects, setSubjects] = useState([]);
+  const [advisors, setAdvisors] = useState([]);
   const [submittedData, setSubmittedData] = useState(null);
 
   const [form, setForm] = useState({
@@ -19,6 +26,9 @@ export default function CourseRegisterPage() {
     email: '', 
     cccd: '',
     subjectId: '',
+    referralSource: '',
+    advisorId: '',
+    advisorName: '',
   });
   const [errors, setErrors] = useState({});
 
@@ -40,13 +50,18 @@ export default function CourseRegisterPage() {
     else if (!/^[0-9]{9,12}$/.test(form.cccd.trim())) e.cccd = 'Số CCCD phải có 9-12 chữ số';
     if (!form.birthPlace.trim()) e.birthPlace = 'Vui lòng nhập nơi sinh';
     if (!form.subjectId) e.subjectId = 'Vui lòng chọn môn học';
+    if (form.referralSource === 'advisor' && !form.advisorId) e.advisorId = 'Vui lòng chọn người tư vấn';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
   useEffect(() => {
-    subjectsApi.getAll().then(res => {
-      setSubjects(res || []);
+    Promise.all([
+      subjectsApi.getAll(),
+      usersApi.getAll()
+    ]).then(([subjectData, advisorData]) => {
+      setSubjects(subjectData || []);
+      setAdvisors((advisorData || []).filter(a => (!a.status || a.status === 'active') && a.role === 'staff'));
     });
   }, []);
 
@@ -59,6 +74,8 @@ export default function CourseRegisterPage() {
     }
 
     const selectedSub = subjects.find(s => String(s.id) === String(form.subjectId));
+    const selectedAdvisor = advisors.find(a => String(a.id) === String(form.advisorId));
+    const referralLabel = REFERRAL_OPTIONS.find(o => o.value === form.referralSource)?.label || '';
 
     setLoading(true);
     try {
@@ -87,6 +104,9 @@ export default function CourseRegisterPage() {
           subjectId: form.subjectId,
           subjectName: selectedSub?.name,
           fee: subjectFee,
+          referralSource: referralLabel,
+          advisorId: form.advisorId || '',
+          advisorName: selectedAdvisor?.fullName || selectedAdvisor?.full_name || form.advisorName || '',
           registeredAt: new Date().toISOString()
         })
       };
@@ -110,8 +130,9 @@ export default function CourseRegisterPage() {
 
   if (submittedData) {
     return (
-      <div className="container" style={{ maxWidth: 700, padding: '60px 20px', margin: '0 auto' }}>
-        <div className="card text-center" style={{ padding: '40px 30px', boxShadow: '0 10px 40px rgba(0,0,0,0.1)' }}>
+      <div className="client-section course-register-page" style={{ paddingTop: 60 }}>
+        <div className="client-container" style={{ maxWidth: 760 }}>
+        <div className="card client-form-card course-success-card text-center" style={{ padding: '40px 30px', boxShadow: '0 10px 40px rgba(0,0,0,0.1)' }}>
           <div style={{ color: 'var(--success-500)', marginBottom: 20 }}>
             <FiCheckCircle size={64} />
           </div>
@@ -147,15 +168,17 @@ export default function CourseRegisterPage() {
 
           <button className="btn btn-ghost" onClick={() => window.location.reload()}>Trở về trang chủ</button>
         </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="container" style={{ maxWidth: 1000, padding: '60px 20px', margin: '0 auto' }}>
-      <div className="section-header text-center" style={{ marginBottom: 50 }}>
-        <h1 style={{ fontSize: '2.5rem', fontWeight: 800, marginBottom: 16, background: 'linear-gradient(135deg, var(--primary-600), var(--accent-600))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }} className="course-reg-title">Đăng ký học Online</h1>
-        <p style={{ color: 'var(--text-secondary)', maxWidth: 650, margin: '0 auto', fontSize: '1.1rem', lineHeight: 1.6 }}>
+    <div className="client-section course-register-page" style={{ paddingTop: 60 }}>
+    <div className="client-container" style={{ maxWidth: 1160 }}>
+      <div className="section-header text-center course-register-header" style={{ marginBottom: 50, textAlign: 'center' }}>
+        <h1 style={{ fontSize: '2.5rem', fontWeight: 800, marginBottom: 16, color: 'var(--client-blue)' }} className="course-reg-title">Đăng ký học Online</h1>
+        <p className="course-reg-subtitle" style={{ color: 'var(--text-secondary)', maxWidth: 'none', margin: '0 auto', fontSize: '1.1rem', lineHeight: 1.6 }}>
           Vui lòng điền đầy đủ các thông tin bắt buộc dưới đây để đăng ký tham gia khóa đào tạo tại Trung tâm Phát triển Phần mềm - Đại học Đà Nẵng.
         </p>
       </div>
@@ -170,9 +193,9 @@ export default function CourseRegisterPage() {
         }
       `}</style>
 
-      <form onSubmit={handleSubmit} noValidate className="animate-fade-in course-reg-form" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 380px', gap: 40, alignItems: 'start' }}>
+      <form onSubmit={handleSubmit} noValidate className="animate-fade-in course-reg-form" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 430px', gap: 40, alignItems: 'start' }}>
         
-        <div className="card course-reg-card" style={{ padding: 40, borderRadius: 'var(--radius-xl)', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+        <div className="card course-reg-card client-form-card" style={{ padding: 40, borderRadius: 'var(--radius-xl)', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
           <h3 style={{ fontSize: '1.2rem', marginBottom: 30, display: 'flex', alignItems: 'center', gap: 12, borderBottom: '1px solid var(--border-color)', paddingBottom: 15 }}>
             <FiUser style={{ color: 'var(--primary-500)' }} /> Thông tin cá nhân học viên
           </h3>
@@ -233,7 +256,7 @@ export default function CourseRegisterPage() {
         </div>
 
         <div style={{ position: 'sticky', top: 100 }} className="course-reg-sticky">
-          <div className="card" style={{ padding: 30, borderRadius: 'var(--radius-xl)', border: '2px solid var(--primary-100)', boxShadow: '0 8px 30px rgba(59, 130, 246, 0.08)' }}>
+          <div className="card course-choice-card client-form-card" style={{ padding: 30, borderRadius: 'var(--radius-xl)', border: '2px solid var(--primary-100)', boxShadow: '0 8px 30px rgba(5, 71, 112, 0.08)' }}>
             <h4 style={{ marginBottom: 20, fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10 }}>
               <FiBook style={{ color: 'var(--primary-500)' }} /> Lựa chọn môn học
             </h4>
@@ -256,7 +279,7 @@ export default function CourseRegisterPage() {
             {form.subjectId && (
               <div style={{ 
                 padding: '16px 20px', 
-                background: 'linear-gradient(to right, var(--success-50), transparent)', 
+                background: 'var(--client-yellow-soft)', 
                 borderRadius: 'var(--radius-md)', 
                 borderLeft: '4px solid var(--success-500)',
                 marginBottom: 24 
@@ -270,10 +293,55 @@ export default function CourseRegisterPage() {
               </div>
             )}
 
+            <div className="form-group referral-panel" style={{ marginBottom: 24 }}>
+              <label className="form-label">
+                Vui lòng cho biết: Anh/chị biết SDC hoặc Học viện CNTT Microsoft qua các phương tiện nào?
+              </label>
+              <div className="referral-options">
+                {REFERRAL_OPTIONS.map(option => (
+                  <label key={option.value} className={`referral-option ${form.referralSource === option.value ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="courseReferralSource"
+                      value={option.value}
+                      checked={form.referralSource === option.value}
+                      onChange={() => {
+                        update('referralSource', option.value);
+                        if (option.value !== 'advisor') {
+                          update('advisorId', '');
+                          update('advisorName', '');
+                        }
+                      }}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+              {form.referralSource === 'advisor' && (
+                <div style={{ marginTop: 12 }}>
+                  <select
+                    className={`form-select ${errors.advisorId ? 'error' : ''}`}
+                    value={form.advisorId}
+                    onChange={e => {
+                      const advisor = advisors.find(a => String(a.id) === String(e.target.value));
+                      update('advisorId', e.target.value);
+                      update('advisorName', advisor?.fullName || advisor?.full_name || '');
+                    }}
+                  >
+                    <option value="">-- Chọn người tư vấn --</option>
+                    {advisors.map(a => (
+                      <option key={a.id} value={a.id}>{a.fullName || a.full_name || a.name}</option>
+                    ))}
+                  </select>
+                  {errors.advisorId && <div className="form-error">{errors.advisorId}</div>}
+                </div>
+              )}
+            </div>
+
             <button 
               type="submit" 
               className="btn btn-primary" 
-              style={{ width: '100%', height: 52, fontSize: '1.05rem', fontWeight: 600, borderRadius: 'var(--radius-lg)', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)' }} 
+              style={{ width: '100%', height: 52, fontSize: '1.05rem', fontWeight: 600, borderRadius: 'var(--radius-lg)', boxShadow: '0 4px 12px rgba(5, 71, 112, 0.3)' }} 
               disabled={loading}
             >
               {loading ? (
@@ -284,12 +352,12 @@ export default function CourseRegisterPage() {
             </button>
           </div>
           
-          <div style={{ padding: '20px 10px', fontSize: '0.85rem', color: 'var(--text-tertiary)', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', marginTop: 20 }}>
-            <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+          <div className="course-note-card" style={{ padding: '20px 10px', fontSize: '0.85rem', color: 'var(--text-tertiary)', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', marginTop: 20 }}>
+            <div className="course-note-item" style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
               <FiCalendar style={{ flexShrink: 0, marginTop: 2, color: 'var(--primary-500)' }} />
               <span>Sau khi nhận được hồ sơ, tư vấn viên sẽ gọi lại để xác nhận và xếp lớp.</span>
             </div>
-            <div style={{ display: 'flex', gap: 10 }}>
+            <div className="course-note-item" style={{ display: 'flex', gap: 10 }}>
               <FiDollarSign style={{ flexShrink: 0, marginTop: 2, color: 'var(--success-500)' }} />
               <span>Bạn có thể nộp học phí qua mã QR sau khi nhấn nút đăng ký thành công.</span>
             </div>
@@ -297,6 +365,7 @@ export default function CourseRegisterPage() {
         </div>
 
       </form>
+    </div>
     </div>
   );
 }

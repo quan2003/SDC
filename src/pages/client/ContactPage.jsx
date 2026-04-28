@@ -12,10 +12,10 @@ export default function ContactPage() {
           <p style={{ color: 'var(--text-secondary)' }}>Chúng tôi luôn sẵn sàng hỗ trợ bạn</p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+        <div className="contact-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
           {/* Info */}
           <div>
-            <div className="card" style={{ padding: 28, height: '100%' }}>
+            <div className="card contact-card contact-info-card" style={{ padding: 28, height: '100%' }}>
               <h3 style={{ marginBottom: 24 }}>Thông tin liên hệ</h3>
               {[
                 { icon: FiMapPin, label: 'Địa chỉ', value: 'Tầng 5 Khu C, 41 Lê Duẩn - Hải Châu - Đà Nẵng' },
@@ -24,7 +24,7 @@ export default function ContactPage() {
                 { icon: FiClock, label: 'Giờ làm việc', value: 'Thứ 2 - Thứ 6: 7:30 - 17:00' },
               ].map((item, i) => (
                 <div key={i} style={{ display: 'flex', gap: 14, marginBottom: 20, alignItems: 'flex-start' }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 'var(--radius-md)', background: 'rgba(59, 130, 246, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <div className="client-icon-surface" style={{ width: 40, height: 40, borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <item.icon size={16} style={{ color: 'var(--primary-400)' }} />
                   </div>
                   <div>
@@ -38,7 +38,7 @@ export default function ContactPage() {
 
           {/* Form */}
           <div>
-            <div className="card" style={{ padding: 28 }}>
+            <div className="card contact-card contact-form-card client-form-card" style={{ padding: 28 }}>
               <h3 style={{ marginBottom: 24 }}>Gửi tin nhắn ngay</h3>
               <form 
                 action="https://formsubmit.co/contact@sdc.udn.vn" 
@@ -80,7 +80,7 @@ export default function ContactPage() {
         </div>
 
         {/* Map */}
-        <div className="card" style={{ padding: 0, marginTop: 24, overflow: 'hidden' }}>
+        <div className="card contact-map-card client-form-card" style={{ padding: 0, marginTop: 24, overflow: 'hidden' }}>
           <iframe 
             src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3644.1960481845504!2d108.21682417490409!3d16.070993384608705!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x31421836b72064ff%3A0x454e48e22686cc98!2zNDEgTMOqIER14bqpbiwgSOG6o2kgQ2jDonUsIMSQw6AgTuG6tW5nIDU1MDAwMCwgVmnhu4d0IE5hbQ!5e1!3m2!1svi!2s!4v1776139741630!5m2!1svi!2s" 
             width="100%" 

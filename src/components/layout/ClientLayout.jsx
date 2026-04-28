@@ -16,14 +16,14 @@ export default function ClientLayout() {
   const [mobileMenu, setMobileMenu] = useState(false);
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div className="client-portal" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* Top bar */}
       <div style={{
-        background: 'rgba(15, 23, 42, 0.95)',
-        borderBottom: '1px solid var(--border-color)',
+        background: 'var(--client-blue)',
+        borderBottom: '3px solid var(--client-yellow)',
         padding: '8px 0',
         fontSize: '0.78rem',
-        color: 'var(--text-tertiary)',
+        color: 'rgba(255, 255, 255, 0.9)',
       }}>
         <div className="client-container client-topbar-inner" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div className="client-topbar-contact" style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
@@ -37,7 +37,8 @@ export default function ClientLayout() {
       <nav style={{
         background: 'var(--bg-header)',
         backdropFilter: 'blur(20px)',
-        borderBottom: '1px solid var(--border-color)',
+        borderBottom: '1px solid rgba(5, 71, 112, 0.12)',
+        boxShadow: '0 10px 30px rgba(5, 71, 112, 0.08)',
         position: 'sticky',
         top: 0,
         zIndex: 100,
@@ -58,11 +59,12 @@ export default function ClientLayout() {
                 key={item.path}
                 to={item.path}
                 end={item.exact}
+                className={({ isActive }) => `client-nav-link${isActive ? ' active' : ''}`}
                 style={({ isActive }) => ({
                   padding: '8px 16px',
                   borderRadius: 'var(--radius-md)',
-                  color: isActive ? 'var(--primary-400)' : 'var(--text-secondary)',
-                  background: isActive ? 'rgba(59, 130, 246, 0.08)' : 'transparent',
+                  color: isActive ? 'var(--client-red)' : 'var(--client-blue)',
+                  background: isActive ? 'var(--client-yellow)' : 'transparent',
                   fontWeight: isActive ? 600 : 500,
                   fontSize: '0.9rem',
                   transition: 'all var(--transition-fast)',
@@ -102,11 +104,12 @@ export default function ClientLayout() {
                 to={item.path}
                 end={item.exact}
                 onClick={() => setMobileMenu(false)}
+                className={({ isActive }) => `client-nav-link client-nav-link-mobile${isActive ? ' active' : ''}`}
                 style={({ isActive }) => ({
                   padding: '10px 16px',
                   borderRadius: 'var(--radius-md)',
-                  color: isActive ? 'var(--primary-400)' : 'var(--text-secondary)',
-                  background: isActive ? 'rgba(59, 130, 246, 0.08)' : 'transparent',
+                  color: isActive ? 'var(--client-red)' : 'var(--client-blue)',
+                  background: isActive ? 'var(--client-yellow)' : 'transparent',
                   fontWeight: isActive ? 600 : 400,
                   textDecoration: 'none',
                 })}
@@ -128,37 +131,33 @@ export default function ClientLayout() {
       </main>
 
       {/* Footer */}
-      <footer style={{
-        background: 'var(--bg-secondary)',
-        borderTop: '1px solid var(--border-color)',
-        padding: '48px 0 24px',
-      }}>
+      <footer className="client-footer" style={{ padding: '56px 0 24px' }}>
         <div className="client-container">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 40, marginBottom: 40 }}>
+          <div className="client-footer-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 40, marginBottom: 40 }}>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+              <div className="client-footer-brand" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
                 <img src="/Logo-SDC.xanh.png" alt="SDC Logo" style={{ width: 40, height: 'auto', objectFit: 'contain' }} />
                 <div style={{ fontWeight: 700 }}>Trung tâm Phát triển Phần mềm</div>
               </div>
-              <p style={{ color: 'var(--text-tertiary)', fontSize: '0.85rem', lineHeight: 1.7 }}>
+              <p className="client-footer-text" style={{ fontSize: '0.85rem', lineHeight: 1.7 }}>
                 Trung tâm Phát triển Phần mềm - Đại học Đà Nẵng. Đào tạo và cấp chứng chỉ ứng dụng Công nghệ Thông tin, Ngoại ngữ theo quy định của Bộ GD&ĐT.
               </p>
             </div>
             <div>
-              <h4 style={{ marginBottom: 16, fontSize: '0.9rem' }}>Liên kết nhanh</h4>
+              <h4 className="client-footer-title" style={{ marginBottom: 16, fontSize: '0.9rem' }}>Liên kết nhanh</h4>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {navItems.map(item => (
-                  <Link key={item.path} to={item.path} style={{ color: 'var(--text-tertiary)', fontSize: '0.85rem', transition: 'color var(--transition-fast)' }}>
+                  <Link key={item.path} className="client-footer-link" to={item.path} style={{ fontSize: '0.85rem' }}>
                     {item.label}
                   </Link>
                 ))}
               </div>
             </div>
             <div>
-              <h4 style={{ marginBottom: 16, fontSize: '0.9rem' }}>Liên hệ</h4>
-              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 12, color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
+              <h4 className="client-footer-title" style={{ marginBottom: 16, fontSize: '0.9rem' }}>Liên hệ</h4>
+              <ul className="client-footer-contact" style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 12, fontSize: '0.95rem' }}>
                 <li style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                  <FiMapPin size={18} style={{ color: 'var(--primary-400)', marginTop: 2, flexShrink: 0 }} />
+                  <FiMapPin size={18} style={{ marginTop: 2, flexShrink: 0 }} />
                   Tầng 5 Khu C, 41 Lê Duẩn - Hải Châu - Đà Nẵng
                 </li>
                 <li style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -170,12 +169,10 @@ export default function ClientLayout() {
               </ul>
             </div>
           </div>
-          <div style={{
-            borderTop: '1px solid var(--border-color)',
+          <div className="client-footer-bottom" style={{
             paddingTop: 20,
             textAlign: 'center',
             fontSize: '0.8rem',
-            color: 'var(--text-tertiary)',
           }}>
             © 2026 Trung tâm Phát triển Phần mềm - Đại học Đà Nẵng. All rights reserved.
           </div>

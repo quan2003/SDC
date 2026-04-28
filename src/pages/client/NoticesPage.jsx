@@ -39,7 +39,7 @@ export default function NoticesPage() {
           {notices.map(n => {
             const parsed = parseNotificationContent(n.content);
             return (
-              <div key={n.id} className="card" style={{ padding: '24px 28px' }}>
+              <div key={n.id} className="card notice-card" style={{ padding: '24px 28px' }}>
                 <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
                   <span className="badge badge-primary" style={{ fontSize: '0.7rem' }}>
                     {{ exam: 'Thi', class: 'Lớp', guide: 'Hướng dẫn', general: 'Chung', score: 'Điểm thi' }[n.type] || n.type}
